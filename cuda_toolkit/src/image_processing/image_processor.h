@@ -24,7 +24,7 @@ public:
     }
 
     bool ncc_forward_match(std::span<const u8> input, 
-                            std::span<u8> output, 
+                            std::span<u8> motion_maps, 
                             uint3 image_dims, 
                             const NccCompParameters& params);
 
@@ -35,12 +35,18 @@ public:
 
 private:
 
-        
+	bool _compare_images(std::span<const float> target, 
+						std::span<const float> reference,
+						std::span<int2> motion_map, 
+						uint2 image_dims, 
+						const NccCompParameters& params);
 
         // Creates the context for the default cuda stream
         NppStreamContext _create_stream_context();
 
         NppStreamContext _stream_context;
+
+
 
     
 };
