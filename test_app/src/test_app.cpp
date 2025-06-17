@@ -70,6 +70,8 @@ TestApp::_message_loop()
 
 			case CudaCommand::NCC_MOTION_DETECT:
 				std::cout << "NCC motion detect command." << std::endl;
+				if(!_handle_motion_detection_command(command))
+					throw std::runtime_error("Error handling motion detection command");
 				break;
 
 			case CudaCommand::ACK:
@@ -93,7 +95,7 @@ TestApp::_message_loop()
 bool
 TestApp::_handle_beamform_command(const CommandPipeMessage& command)
 {
-    const CudaBeamformerParameters* bp = &((_transfer_server->get_parameters_smem())->BeamformerParameters);
+    const CudaBeamformerParameters* bp = &((_transfer_server->get_parameters_smem())->beamformerParameters);
 
 	if (!bp)
 	{
@@ -140,6 +142,55 @@ TestApp::_handle_beamform_command(const CommandPipeMessage& command)
         std::cerr << "Error: Failed to respond with success." << std::endl;
         return false;
     }
+
+	delete[] output_data;
+	return true;
+}
+
+bool
+TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
+{
+	const NccMotionParameters* params = &((_transfer_server->get_parameters_smem())->nccMotionParameters);
+
+	if (!params)
+	{
+		std::cerr << "Error: NCC parameters not set." << std::endl;
+		return false;
+	}
+
+	size_t data_size = command.data_size;
+	auto data_buffer = _transfer_server->get_data_smem();
+	if (data_buffer.empty())
+	{
+		std::cerr << "Error: Data buffer not set." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	_transfer_server->respond_ack();
+	// Process motion detection
+
+	uint output_size = params->motion_grid_spacing * params->motion_grid_spacing * sizeof(int) * 2;
+	if (output_size > _transfer_server->get_data_smem().size())
+	{
+		std::cerr << "Error: Output size exceeds shared memory size." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	u8* output_data = new u8[output_size];
+
+	bool result = cuda_toolkit::motion_detection(
+		std::span<const u8>(data_buffer.data(), data_size),
+		std::span<u8>(output_data, output_size), // Placeholder for motion maps
+		*params);
+	
+	_transfer_server->write_output_data(std::span<const u8>(output_data, output_size));
+	if (!_transfer_server->respond_success(output_size))
+	{
+		std::cerr << "Error: Failed to respond with success." << std::endl;
+		return false;
+	}
 
 	delete[] output_data;
 	return true;

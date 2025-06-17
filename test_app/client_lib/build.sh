@@ -13,9 +13,9 @@ cp -f ${cuda_lib_header_path}/cuda_beamformer_parameters.h ${output_dir}/cuda_be
 
 pushd ${output_dir}
 
-cflags="-march=native -std=c11 -Wall -I./."
+cflags="-march=native -std=c11 -Wall  -Wno-unused-variable -Wno-unused-function -I./."
 debug_flags="${cflags} -O0 -fuse-ld=lld -g -gcodeview -Wl,--pdb="
-libcflags="${cflags} -fPIC -shared -Wno-unused-variable "
+libcflags="${cflags} -fPIC -shared"
 ldflags="${ldflags} -lm -lgdi32 -lwinmm -L./."
 
 matlab_libcflags="${libcflags} -DMATLAB_CONSOLE"

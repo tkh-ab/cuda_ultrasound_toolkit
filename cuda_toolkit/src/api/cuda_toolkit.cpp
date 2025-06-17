@@ -1,6 +1,7 @@
 
 #include "../beamformer/beamformer.h"
 #include "../rf_processing/rf_processor.h"
+#include "../image_processing/image_processor.h"
 #include "../public/cuda_toolkit.hpp"
 
 struct BeamformerBuffers
@@ -30,6 +31,12 @@ static Beamformer& get_beamformer()
 {
    static Beamformer beamformer;
    return beamformer;
+}
+
+static ImageProcessor& get_image_processor()
+{
+	static ImageProcessor image_processor;
+	return image_processor;
 }
 
 
@@ -169,4 +176,13 @@ cuda_toolkit::beamform(std::span<const uint8_t> input_data,
     }
 
     return result;
+}
+
+bool
+cuda_toolkit::motion_detection(std::span<const uint8_t> images, 
+								  std::span<uint8_t> motion_maps,
+								  const NccMotionParameters& params)
+{
+	auto& image_processor = get_image_processor();
+	return image_processor.ncc_forward_match(images, motion_maps, params);
 }

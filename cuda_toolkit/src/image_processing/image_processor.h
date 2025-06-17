@@ -7,10 +7,6 @@
 
 #include "../defs.h"
 
-
-namespace image_processing 
-{
-
 template <typename T>
 concept SupportedNccType = std::is_same_v<T, float> || std::is_same_v<T, uint8_t>;
 
@@ -25,8 +21,7 @@ public:
 
     bool ncc_forward_match(std::span<const u8> input, 
                             std::span<u8> motion_maps, 
-                            uint3 image_dims, 
-                            const NccCompParameters& params);
+                            const NccMotionParameters& params);
 
     bool svd_filter(std::span<const cuComplex> input, 
                     std::span<cuComplex> output, 
@@ -39,7 +34,7 @@ private:
 						std::span<const float> reference,
 						std::span<int2> motion_map, 
 						uint2 image_dims, 
-						const NccCompParameters& params);
+						const NccMotionParameters& params);
 
         // Creates the context for the default cuda stream
         NppStreamContext _create_stream_context();
@@ -52,7 +47,6 @@ private:
 };
 
 
-}
 
 
 

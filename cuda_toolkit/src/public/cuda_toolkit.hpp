@@ -17,6 +17,10 @@ namespace cuda_toolkit
     EXPORT_FN bool beamform(std::span<const uint8_t> input_data, 
                   std::span<uint8_t> output_data, 
                   const CudaBeamformerParameters& bp);
+
+	EXPORT_FN bool motion_detection(std::span<const uint8_t> images, 
+				  std::span<uint8_t> motion_maps,
+				  const NccMotionParameters& params);
 }
 
 #endif // __cplusplus

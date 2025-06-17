@@ -15,6 +15,7 @@ public:
 private:
 
     bool _handle_beamform_command(const CommandPipeMessage& command);
+	bool _handle_motion_detection_command(const CommandPipeMessage& command);
     void _message_loop();
 
     TransferServer* _transfer_server;

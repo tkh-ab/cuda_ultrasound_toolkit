@@ -58,7 +58,7 @@ typedef enum ReadiOrdering
     WALSH = 1,
 } ReadiOrdering;
 
-typedef struct NccCompParameters
+typedef struct NccMotionParameters
 {
 	uint patch_size; 			// Patch size in pixels (assumed square)
 	uint motion_grid_spacing;	// [pixels] Spacing between sample patches
@@ -66,8 +66,10 @@ typedef struct NccCompParameters
 	float correlation_threshold;// Threshold for the peak to be considered valid relative to the value for no motion.
 	float min_patch_variance; 	// Minimum variance of the search patch, if its too flat we won't get a good result
 	uint reference_frame;		// Frame to use as the reference for the computation
-	InputDataTypes data_type;  // Image data type, f32 or u8
-} NccCompParameters;
+	uint frame_count;			// Number of frames in the input data
+	uint image_dims[2];			// [rows, cols] Dimensions of the input images
+	InputDataTypes data_type;   // Image data type, f32 or u8
+} NCCMotionParameters;
 
 typedef struct CudaBeamformerParameters
 {

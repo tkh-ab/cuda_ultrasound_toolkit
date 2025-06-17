@@ -1,11 +1,25 @@
 
+#include <format>
 
 #include "image_processor.h"
 
 
-namespace image_processing {
-
-
+static inline void show_corr_map(const float* d_corr_map, int width, int height)
+{
+	float* corr_map = new float[width * height];
+	cudaMemcpy(corr_map, d_corr_map, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+	std::cout << "Correlation Map:" << std::endl;
+	for (int y = 0; y < height; ++y)
+	{
+		for (int x = 0; x < width; ++x)
+		{
+			std::cout << std::format("{:+4.3f}", corr_map[y * width + x]) << " ";
+		}
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+	delete[] corr_map;
+}
 
 NppStreamContext 
 ImageProcessor::_create_stream_context() 
@@ -34,14 +48,14 @@ ImageProcessor::_create_stream_context()
 
 bool ImageProcessor::ncc_forward_match(std::span<const u8> input, 
 										std::span<u8> motion_maps, 
-										uint3 image_dims, 
-										const NccCompParameters& params)
+										const NccMotionParameters& params)
 {
 
-	uint2 single_image_dims = { image_dims.x, image_dims.y };
-	uint image_count = image_dims.z;
+	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
+	uint image_count = params.frame_count;
 
-	size_t image_size = single_image_dims.x * single_image_dims.y * sizeof(float);
+	size_t pixel_count = image_dims.x * image_dims.y;
+	size_t image_size = pixel_count * sizeof(float);
 
 	float* d_src_image = nullptr;
 	float* d_tpl_image = nullptr;
@@ -49,11 +63,11 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_tpl_image, image_size));
 
 	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_src_image, input.data(), image_size, cudaMemcpyHostToDevice));
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data() + image_size, image_size, cudaMemcpyHostToDevice));
+	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data(), image_size, cudaMemcpyHostToDevice));
 
 
-	uint2 motion_grid_dims = { single_image_dims.x / params.motion_grid_spacing, 
-							   single_image_dims.y / params.motion_grid_spacing };
+	uint2 motion_grid_dims = { image_dims.x / params.motion_grid_spacing, 
+							   image_dims.y / params.motion_grid_spacing };
 
 	size_t motion_map_size = motion_grid_dims.x * motion_grid_dims.y * sizeof(int2);
 	size_t motion_map_count = motion_grid_dims.x * motion_grid_dims.y;
@@ -61,10 +75,10 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 	std::span<int2> motion_map_span(reinterpret_cast<int2*>(motion_maps.data()), motion_map_count);
 
 	bool result = _compare_images(
-		std::span<const float>(d_tpl_image, single_image_dims.x * single_image_dims.y),
-		std::span<const float>(d_src_image, single_image_dims.x * single_image_dims.y),
+		std::span<const float>(d_tpl_image, pixel_count),
+		std::span<const float>(d_src_image, pixel_count),
 		motion_map_span,
-		single_image_dims,
+		image_dims,
 		params
 	);
 
@@ -79,7 +93,7 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 						std::span<const float> source_image,
 						std::span<int2> motion_map, 
 						uint2 image_dims, 
-						const NccCompParameters& params)
+						const NccMotionParameters& params)
 {
 
 	NppiSize tpl_roi = { (int)params.patch_size, (int)params.patch_size };
@@ -101,19 +115,23 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_scratch_buffer, scratch_buffer_size));
 
-	size_t corr_out_size = tpl_roi.width * tpl_roi.height * sizeof(float);
-	int out_line_step = tpl_roi.width * sizeof(float);
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_output_buffer, corr_out_size)); 
+	NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
+							 	 .height = src_roi.height - tpl_roi.height + 1 };
+
+	size_t valid_corr_size = valid_corr_dims.width * valid_corr_dims.height  * sizeof(float);
+	int valid_corr_line_step = valid_corr_dims.width * sizeof(float);
+
+	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_output_buffer, valid_corr_size)); 
 
 	int y_margin = params.search_margins[1];
 	int x_margin = params.search_margins[0];
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
-		uint row_id = i * params.motion_grid_spacing;
-		float* target_row_start = (float*)template_image.data() + row_id * image_dims.x;
+		uint tpl_row_id = i * params.motion_grid_spacing;
+		float* target_row_start = (float*)template_image.data() + tpl_row_id * image_dims.x;
 
-		int src_row_id = row_id - y_margin;
-		int bot_overflow = row_id + tpl_roi.height + y_margin - image_dims.y;
+		int src_row_id = tpl_row_id - y_margin;
+		int bot_overflow = tpl_row_id + tpl_roi.height + y_margin - image_dims.y;
 
 		NppiSize row_src_roi = src_roi;
 		if( src_row_id < 0 )
@@ -134,11 +152,11 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 		
 		for( uint j = 0; j < motion_grid_dims.x; j++ ) // Columns
 		{
-			uint col_id = j * params.motion_grid_spacing;
-			float* template_corner = target_row_start + col_id;
+			uint tpl_col_id = j * params.motion_grid_spacing;
+			float* template_corner = target_row_start + tpl_col_id;
 
-			int src_col_id = col_id - x_margin;
-			int right_overflow = col_id + tpl_roi.width + x_margin - image_dims.x;
+			int src_col_id = tpl_col_id - x_margin;
+			int right_overflow = tpl_col_id + tpl_roi.width + x_margin - image_dims.x;
 
 			NppiSize current_src_roi = row_src_roi;
 			if( src_col_id < 0 )
@@ -155,11 +173,17 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 			}
 			float* source_corner = src_row_start + src_col_id;
 
+			uint2 no_shift_index = {tpl_col_id - src_col_id, tpl_row_id - src_row_id};
+			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
 
 			// Perform the NCC comparison
 			status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, image_line_step, current_src_roi, 
 													template_corner, image_line_step, tpl_roi, 
-													d_output_buffer, out_line_step, d_scratch_buffer, _stream_context);
+													d_output_buffer, valid_corr_line_step, d_scratch_buffer, _stream_context);
+
+			show_corr_map(d_output_buffer, valid_corr_dims.width, valid_corr_dims.height);
+
+			std::cout << "No shift value: " << sample_value<float>(d_output_buffer + no_shift_offset) << std::endl;
 			if (status != NPP_SUCCESS)
 			{
 				std::cerr << "NPP error during NCC comparison: " << status << std::endl;
@@ -175,6 +199,4 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 	cudaFree(d_output_buffer);
 	return true;
 	
-}
-
 }

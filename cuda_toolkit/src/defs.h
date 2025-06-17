@@ -174,6 +174,14 @@ sample_data(const T* d_value, T* h_value, uint count = 1)
     cudaMemcpy(h_value, d_value, count * sizeof(T), cudaMemcpyDeviceToHost);
 }
 
+template <typename T> T
+sample_value(const T* d_value)
+{
+	T value;
+	cudaMemcpy(&value, d_value, sizeof(T), cudaMemcpyDeviceToHost);
+	return value;
+}
+
 
 namespace types
 {

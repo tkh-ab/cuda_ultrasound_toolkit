@@ -43,18 +43,11 @@ typedef struct SVDParameters
 	int filter_indicies[256];	// Singular values to remove
 } SVDParameters;
 
-typedef struct NCCMotionParameters
-{
-	int frame_count;
-	unsigned int  frame_dims[3];		// [X, Y, Z]
-	int reference_frame;
-} NCCMotionParameters;
-
 typedef struct SharedMemoryParams
 {
-	CudaBeamformerParameters BeamformerParameters;
-	SVDParameters SVDParameters;
-	NCCMotionParameters NccMotionParameters;
+	CudaBeamformerParameters beamformerParameters;
+	SVDParameters svdParameters;
+	NCCMotionParameters nccMotionParameters;
 } SharedMemoryParams;
 
 

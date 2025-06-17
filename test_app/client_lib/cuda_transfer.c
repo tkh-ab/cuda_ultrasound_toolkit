@@ -247,6 +247,54 @@ wait_for_result()
     return message;
 }
 
+static void
+_motion_detect(const void* images, size_t data_size,
+			  const NCCMotionParameters* params, int* motion_maps)
+{
+	if (data_size > DATA_SMEM_SIZE)
+	{
+		error_msg("Data size too large: %zu, Max: %lu", data_size, DATA_SMEM_SIZE);
+		return;
+	}
+
+	if(!setup_shared_resources())
+	{
+		error_msg("Failed to setup shared resources");
+		return;
+	}
+
+	// Load the motion detection parameters
+	memcpy(&(g_params->nccMotionParameters), params, sizeof(NCCMotionParameters)); 
+
+	// Copy the raw data to shared memory
+	memcpy(g_data, images, data_size);
+
+	if (!send_command(NCC_MOTION_DETECT, data_size))
+	{
+		_cleanup_shared_resources();
+		error_msg("Failed to send command to CUDA server");
+		return;
+	}
+
+	if (!wait_for_ack())
+	{
+		_cleanup_shared_resources();
+		error_msg("Failed to receive ack from CUDA server");
+		return;
+	}
+
+	CommandPipeMessage result = wait_for_result();
+	if (result.opcode == ERR)
+	{
+		error_msg("Failed to receive valid result from CUDA server");
+		_cleanup_shared_resources();
+		return;
+	}
+
+	size_t output_size = result.data_size;
+	memcpy(motion_maps, g_data, output_size);
+}
+
 static void 
 _beamform(const void* data, size_t data_size,
               const CudaBeamformerParameters* bp, float* output)
@@ -307,6 +355,13 @@ beamform_f32(const float* data, CudaBeamformerParameters bp, float* output)
 {
     size_t data_size = bp.rf_raw_dim[0] * bp.rf_raw_dim[1] * sizeof(float);
     _beamform((void*)data, data_size, &bp, output);
+}
+
+void
+motion_detect_f32(const float* images, NCCMotionParameters params, int* motion_maps)
+{
+	size_t data_size = params.image_dims[0] * params.image_dims[1] * params.frame_count * sizeof(float);
+	_motion_detect((void*)images, data_size, &params, motion_maps);
 }
 
 void
