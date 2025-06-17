@@ -30,8 +30,8 @@ public:
 
 private:
 
-	bool _compare_images(std::span<const float> target, 
-						std::span<const float> reference,
+	bool _compare_images(PitchedArray<float> template_image,
+						PitchedArray<float> source_image,
 						std::span<int2> motion_map, 
 						uint2 image_dims, 
 						const NccMotionParameters& params);

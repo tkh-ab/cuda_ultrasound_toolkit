@@ -183,6 +183,58 @@ sample_value(const T* d_value)
 }
 
 
+template <typename T> 
+struct PitchedArray
+{
+	T* data = nullptr;
+	size_t pitch = 0;
+	uint3 dims = { 0, 0, 0 };
+
+	PitchedArray() = default;
+	~PitchedArray()
+	{	
+		if (data) {
+			cudaFree(data);
+			data = nullptr;
+		}
+		pitch = 0;
+		dims = { 0, 0, 0 };
+	}
+
+	PitchedArray(const PitchedArray&) = delete;
+	PitchedArray& operator=(const PitchedArray&) = delete;
+	PitchedArray(const PitchedArray&&) = delete;
+	PitchedArray&& operator=(const PitchedArray&&) = delete;
+
+
+	T* get_row(uint row) const
+	{
+		assert(row < dims.y);
+		return (T*)((uint8_t*)data + row * pitch);
+	}
+
+	bool allocate(uint width, uint height, uint depth = 1)
+	{
+		if (data) {
+			std::cerr << "PitchedArray already allocated." << std::endl;
+			return false;
+		}
+
+		dims = { width, height, depth };
+		size_t size = width * height * depth * sizeof(T);
+		if (cudaMallocPitch((void**)&data, &pitch, width * sizeof(T), height) != cudaSuccess) {
+			std::cerr << "Failed to allocate pitched array of size: " << size << std::endl;
+			data = nullptr;
+			pitch = 0;
+			dims = {0, 0, 0};
+			return false;
+		}
+
+		return true;
+	}
+};
+
+
 namespace types
 {
     template <InputDataTypes> struct type_for;

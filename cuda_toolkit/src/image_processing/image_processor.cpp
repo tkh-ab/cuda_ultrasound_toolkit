@@ -57,6 +57,24 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 	size_t pixel_count = image_dims.x * image_dims.y;
 	size_t image_size = pixel_count * sizeof(float);
 
+
+	std::vector<PitchedArray<float>> d_input_images(image_count);
+
+	for (uint i = 0; i < image_count; i++)
+	{
+		float* d_image = nullptr;
+		size_t image_pitch = 0;
+		CUDA_RETURN_IF_ERROR(cudaMallocPitch((void**)&d_image, &image_pitch, image_dims.x * sizeof(float), image_dims.y));
+		CUDA_RETURN_IF_ERROR(cudaMemcpy2D(d_image, image_pitch, 
+										   input.data() + i * image_size, 
+										   image_dims.x * sizeof(float), 
+										   image_dims.x * sizeof(float), 
+										   image_dims.y, 
+										   cudaMemcpyHostToDevice));
+		d_input_images[i] = { .data=d_image, .pitch=image_pitch, .dims={ image_dims.x, image_dims.y, 1 } };
+	}
+	
+
 	float* d_src_image = nullptr;
 	float* d_tpl_image = nullptr;
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_src_image, image_size));
@@ -75,8 +93,8 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 	std::span<int2> motion_map_span(reinterpret_cast<int2*>(motion_maps.data()), motion_map_count);
 
 	bool result = _compare_images(
-		std::span<const float>(d_tpl_image, pixel_count),
-		std::span<const float>(d_src_image, pixel_count),
+		d_input_images[0],
+		d_input_images[0],
 		motion_map_span,
 		image_dims,
 		params
@@ -89,8 +107,8 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 }
 
 bool 
-ImageProcessor::_compare_images(std::span<const float> template_image, 
-						std::span<const float> source_image,
+ImageProcessor::_compare_images(PitchedArray<float> template_image,
+						PitchedArray<float> source_image,
 						std::span<int2> motion_map, 
 						uint2 image_dims, 
 						const NccMotionParameters& params)
@@ -128,7 +146,7 @@ ImageProcessor::_compare_images(std::span<const float> template_image,
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
 		uint tpl_row_id = i * params.motion_grid_spacing;
-		float* target_row_start = (float*)template_image.data() + tpl_row_id * image_dims.x;
+		float* target_row_start = (float*)template_image.data + tpl_row_id * image_dims.x;
 
 		int src_row_id = tpl_row_id - y_margin;
 		int bot_overflow = tpl_row_id + tpl_roi.height + y_margin - image_dims.y;
