@@ -121,7 +121,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;CUDATOOLKIT_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
@@ -131,17 +131,22 @@
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(VC_IncludePath)$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <TreatSpecificWarningsAsErrors>4715</TreatSpecificWarningsAsErrors>
+      <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <ExternalTemplatesDiagnostics>true</ExternalTemplatesDiagnostics>
+      <DisableSpecificWarnings>4464;4324</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>%(AdditionalDependencies);cudart.lib;cudadevrt.lib;cufft.lib;cublas.lib</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);cudart.lib;cudadevrt.lib;cufft.lib;cublas.lib;nppc.lib;nppist.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(CudaToolkitLibDir);C:\Users\tkhen\source\repos\cuda-samples\Common\lib\x64</AdditionalLibraryDirectories>
     </Link>
     <CudaLink>
-      <AdditionalDependencies>cufft.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(CudaToolkitLibDir);$(CudaToolkitBinDir)/crt</AdditionalLibraryDirectories>
     </CudaLink>
     <PostBuildEvent>
       <Command>robocopy "$(ProjectDir)src\public" "$(ProjectDir)include" *.h* /MIR /NDL /NFL /NJH /NJS
@@ -159,7 +164,7 @@ IF %ERRORLEVEL% LEQ 1 (
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -169,6 +174,11 @@ IF %ERRORLEVEL% LEQ 1 (
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <TreatSpecificWarningsAsErrors>4715</TreatSpecificWarningsAsErrors>
+      <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <ExternalTemplatesDiagnostics>true</ExternalTemplatesDiagnostics>
+      <DisableSpecificWarnings>4464;4324</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -176,7 +186,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>cudart.lib;cudadevrt.lib;cufft.lib;cublas.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);cudart.lib;cudadevrt.lib;cufft.lib;cublas.lib;nppc.lib;nppist.lib</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>robocopy "$(ProjectDir)src\public" "$(ProjectDir)include" *.h* /MIR /NDL /NFL /NJH /NJS
@@ -191,6 +201,10 @@ IF %ERRORLEVEL% LEQ 1 (
       <AdditionalOptions>-std=c++20 -Wno-deprecated-gpu-targets %(AdditionalOptions)</AdditionalOptions>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
     </CudaCompile>
+    <CudaLink>
+      <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(CudaToolkitLibDir);$(CudaToolkitBinDir)/crt</AdditionalLibraryDirectories>
+    </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="src\beamformer\beamformer.cu" />

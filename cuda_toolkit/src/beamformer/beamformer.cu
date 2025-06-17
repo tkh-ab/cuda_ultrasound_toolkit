@@ -18,7 +18,7 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.samples_per_meter = bp.sampling_frequency / bp.speed_of_sound;
 
     constants.pitches = {bp.xdc_element_pitch[0], bp.xdc_element_pitch[1]};
-    constants.delay_samples = (int)(bp.time_offset * bp.sampling_frequency);
+    constants.delay_samples = static_cast<int>((bp.time_offset * bp.sampling_frequency));
     constants.sequence = bp.das_shader_id;
 
     constants.voxel_dims = {bp.output_points[0], bp.output_points[1], bp.output_points[2]};
@@ -34,16 +34,15 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.resolutions = {lateral_resolution, elevation_resolution, axial_resolution};
     constants.f_number = bp.f_number;
 
-    constants.mixes_count = bp.mixes_count;
-    constants.mixes_offset = bp.mixes_offset;
-
+    constants.mixes_count = static_cast<u8>(bp.mixes_count);
+    constants.mixes_offset = static_cast<u8>(bp.mixes_offset);
 	
-    constants.readi_group_count = bp.readi_group_count;
+    constants.readi_group_count = static_cast<u8>(bp.readi_group_count);
     if(constants.readi_group_count == 0)
     {
         constants.readi_group_count = 1; // If no groups, just use one
     }
-    constants.readi_group_id = bp.readi_group_id;
+    constants.readi_group_id = static_cast<u8>(bp.readi_group_id);
     constants.readi_order = bp.readi_ordering;
 
     float3 focal_point = {0.0f, 0.0f, bp.focal_depths[0]};

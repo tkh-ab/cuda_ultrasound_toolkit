@@ -197,7 +197,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 
 //            float coherent_sum = NORM_SQUARE_F2(total);
 
-	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
+	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);5
 	//total = SCALE_F2(total, coherency_factor);
 
 	volume[volume_offset] = total;
