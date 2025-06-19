@@ -51,59 +51,60 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 										const NccMotionParameters& params)
 {
 
-	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
-	uint image_count = params.frame_count;
+	return true;
+	// uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
+	// uint image_count = params.frame_count;
 
-	size_t pixel_count = image_dims.x * image_dims.y;
-	size_t image_size = pixel_count * sizeof(float);
+	// size_t pixel_count = image_dims.x * image_dims.y;
+	// size_t image_size = pixel_count * sizeof(float);
 
 
-	std::vector<PitchedArray<float>> d_input_images(image_count);
+	// std::vector<PitchedArray<float>> d_input_images(image_count);
 
-	for (uint i = 0; i < image_count; i++)
-	{
-		float* d_image = nullptr;
-		size_t image_pitch = 0;
-		CUDA_RETURN_IF_ERROR(cudaMallocPitch((void**)&d_image, &image_pitch, image_dims.x * sizeof(float), image_dims.y));
-		CUDA_RETURN_IF_ERROR(cudaMemcpy2D(d_image, image_pitch, 
-										   input.data() + i * image_size, 
-										   image_dims.x * sizeof(float), 
-										   image_dims.x * sizeof(float), 
-										   image_dims.y, 
-										   cudaMemcpyHostToDevice));
-		d_input_images[i] = { .data=d_image, .pitch=image_pitch, .dims={ image_dims.x, image_dims.y, 1 } };
-	}
+	// for (uint i = 0; i < image_count; i++)
+	// {
+	// 	float* d_image = nullptr;
+	// 	size_t image_pitch = 0;
+	// 	CUDA_RETURN_IF_ERROR(cudaMallocPitch((void**)&d_image, &image_pitch, image_dims.x * sizeof(float), image_dims.y));
+	// 	CUDA_RETURN_IF_ERROR(cudaMemcpy2D(d_image, image_pitch, 
+	// 									   input.data() + i * image_size, 
+	// 									   image_dims.x * sizeof(float), 
+	// 									   image_dims.x * sizeof(float), 
+	// 									   image_dims.y, 
+	// 									   cudaMemcpyHostToDevice));
+	// 	d_input_images[i] = { .data=d_image, .pitch=image_pitch, .dims={ image_dims.x, image_dims.y, 1 } };
+	// }
 	
 
-	float* d_src_image = nullptr;
-	float* d_tpl_image = nullptr;
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_src_image, image_size));
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_tpl_image, image_size));
+	// float* d_src_image = nullptr;
+	// float* d_tpl_image = nullptr;
+	// CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_src_image, image_size));
+	// CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_tpl_image, image_size));
 
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_src_image, input.data(), image_size, cudaMemcpyHostToDevice));
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data(), image_size, cudaMemcpyHostToDevice));
+	// CUDA_RETURN_IF_ERROR(cudaMemcpy(d_src_image, input.data(), image_size, cudaMemcpyHostToDevice));
+	// CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data(), image_size, cudaMemcpyHostToDevice));
 
 
-	uint2 motion_grid_dims = { image_dims.x / params.motion_grid_spacing, 
-							   image_dims.y / params.motion_grid_spacing };
+	// uint2 motion_grid_dims = { image_dims.x / params.motion_grid_spacing, 
+	// 						   image_dims.y / params.motion_grid_spacing };
 
-	size_t motion_map_size = motion_grid_dims.x * motion_grid_dims.y * sizeof(int2);
-	size_t motion_map_count = motion_grid_dims.x * motion_grid_dims.y;
+	// size_t motion_map_size = motion_grid_dims.x * motion_grid_dims.y * sizeof(int2);
+	// size_t motion_map_count = motion_grid_dims.x * motion_grid_dims.y;
 
-	std::span<int2> motion_map_span(reinterpret_cast<int2*>(motion_maps.data()), motion_map_count);
+	// std::span<int2> motion_map_span(reinterpret_cast<int2*>(motion_maps.data()), motion_map_count);
 
-	bool result = _compare_images(
-		d_input_images[0],
-		d_input_images[0],
-		motion_map_span,
-		image_dims,
-		params
-	);
+	// bool result = _compare_images(
+	// 	d_input_images[0],
+	// 	d_input_images[0],
+	// 	motion_map_span,
+	// 	image_dims,
+	// 	params
+	// );
 
-	cudaFree(d_src_image);
-	cudaFree(d_tpl_image);
+	// cudaFree(d_src_image);
+	// cudaFree(d_tpl_image);
 
-	return result;
+	// return result;
 }
 
 bool 
@@ -146,7 +147,7 @@ ImageProcessor::_compare_images(PitchedArray<float> template_image,
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
 		uint tpl_row_id = i * params.motion_grid_spacing;
-		float* target_row_start = (float*)template_image.data + tpl_row_id * image_dims.x;
+		float* target_row_start = template_image.data + tpl_row_id * image_dims.x;
 
 		int src_row_id = tpl_row_id - y_margin;
 		int bot_overflow = tpl_row_id + tpl_roi.height + y_margin - image_dims.y;
@@ -166,8 +167,8 @@ ImageProcessor::_compare_images(PitchedArray<float> template_image,
 			bot_overflow = 0;
 		}
 
-		float* src_row_start = (float*)source_image.data() + src_row_id * image_dims.x;
-		
+		float* src_row_start = source_image.data + src_row_id * image_dims.x;
+
 		for( uint j = 0; j < motion_grid_dims.x; j++ ) // Columns
 		{
 			uint tpl_col_id = j * params.motion_grid_spacing;

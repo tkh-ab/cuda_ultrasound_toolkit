@@ -256,10 +256,10 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
-				// if (t == 0)
-				// {
-				//     value = SCALE_F2(value, I_SQRT_128);
-				// }
+				if (t == 0)
+				{
+				    value = SCALE_F2(value, I_SQRT_128);
+				}
 
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
@@ -279,10 +279,13 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 		}
 	}
 
-//            float coherent_sum = NORM_SQUARE_F2(total);
+    float coherent_sum = NORM_SQUARE_F2(total);
 
-	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
-	//total = SCALE_F2(total, coherency_factor);
+	float coherency_factor = coherent_sum / incoherent_sum;
+
+	coherency_factor = powf(coherency_factor, 1/3.f);
+
+	total = SCALE_F2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
