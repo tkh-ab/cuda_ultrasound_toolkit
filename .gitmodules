@@ -1,3 +1,3 @@
 [submodule "ogl_beamforming_cuda"]
 	path = ogl_beamforming_cuda
-	url = https://github.com/tkhenry-uofa/ogl_beamforming_cuda.git
+	url = https://github.com/tkh-ab/ogl_beamforming_cuda.git
