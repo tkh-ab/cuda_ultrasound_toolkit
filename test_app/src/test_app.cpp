@@ -178,6 +178,8 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 		return false;
 	}
 
+	std::cout << "Returning result"<< std::endl;
+	output_size = 0;
 	u8* output_data = new u8[output_size];
 
 	bool result = cuda_toolkit::motion_detection(

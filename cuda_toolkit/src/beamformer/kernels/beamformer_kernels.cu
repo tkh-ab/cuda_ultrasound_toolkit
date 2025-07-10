@@ -283,7 +283,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 
 	float coherency_factor = coherent_sum / incoherent_sum;
 
-	coherency_factor = powf(coherency_factor, 1/3.f);
+	coherency_factor = powf(coherency_factor, 1/10.f);
 
 	total = SCALE_F2(total, coherency_factor);
 

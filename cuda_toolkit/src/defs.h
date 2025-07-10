@@ -186,25 +186,54 @@ sample_value(const T* d_value)
 template <typename T> 
 struct PitchedArray
 {
-	T* data = nullptr;
-	size_t pitch = 0;
-	uint3 dims = { 0, 0, 0 };
+	T* data;
+	size_t pitch;
+	uint3 dims;
 
-	PitchedArray() = default;
+	PitchedArray() : data(nullptr), pitch(0), dims({0,0,0}) {} 
+
+	PitchedArray(T* data_in, size_t pitch_in, uint3 dims_in)
+		: data(data_in), pitch(pitch_in), dims(dims_in) {}
+
 	~PitchedArray()
 	{	
 		if (data) {
 			cudaFree(data);
 			data = nullptr;
 		}
-		pitch = 0;
-		dims = { 0, 0, 0 };
 	}
 
 	PitchedArray(const PitchedArray&) = delete;
 	PitchedArray& operator=(const PitchedArray&) = delete;
-	PitchedArray(const PitchedArray&&) = delete;
-	PitchedArray&& operator=(const PitchedArray&&) = delete;
+
+
+	PitchedArray(PitchedArray&& from) noexcept
+	{
+		data = from.data;
+		pitch = from.pitch;
+		dims = from.dims;
+
+		from.data = nullptr;
+		from.pitch = 0;
+		from.dims = {0,0,0};
+	}
+
+	
+	PitchedArray& operator=(PitchedArray&& from) noexcept
+	{
+		if (this != &from) {
+			if(data) cudaFree(data);
+
+			data = from.data;
+			pitch = from.pitch;
+			dims = from.dims;
+
+			from.data = nullptr;
+			from.pitch = 0;
+			from.dims = {0,0,0};
+		}
+		return *this;
+	}
 
 
 	T* get_row(uint row) const
