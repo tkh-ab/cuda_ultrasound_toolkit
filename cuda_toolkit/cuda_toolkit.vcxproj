@@ -210,6 +210,7 @@ IF %ERRORLEVEL% LEQ 1 (
     <CudaCompile Include="src\beamformer\beamformer.cu" />
     <CudaCompile Include="src\beamformer\kernels\beamformer_kernels.cu" />
     <CudaCompile Include="src\beamformer\kernels\other_beamformers.cu" />
+    <CudaCompile Include="src\image_processing\kernels\block_match_kernels.cu" />
     <CudaCompile Include="src\rf_processing\data_conversion\data_converter.cu" />
     <CudaCompile Include="src\rf_processing\rf_ffts\hilbert_handler.cu" />
   </ItemGroup>
@@ -226,6 +227,7 @@ IF %ERRORLEVEL% LEQ 1 (
     <ClInclude Include="src\beamformer\beamformer_constants.cuh" />
     <ClInclude Include="src\beamformer\beamformer_utils.cuh" />
     <ClInclude Include="src\beamformer\kernels\beamformer_kernels.cuh" />
+    <ClInclude Include="src\image_processing\kernels\block_match_kernels.cuh" />
     <ClInclude Include="src\public\cuda_beamformer_parameters.h" />
     <ClInclude Include="source\cuda_session.h" />
     <ClInclude Include="source\cuda_toolkit.h" />

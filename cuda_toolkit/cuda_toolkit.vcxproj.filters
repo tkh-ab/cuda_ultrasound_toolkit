@@ -76,6 +76,8 @@
     <ClInclude Include="src\rf_processing\rf_ffts\hilbert_kernels.cuh" />
     <ClInclude Include="src\rf_processing\data_conversion\data_conversion_kernels.cuh" />
     <ClInclude Include="src\beamformer\kernels\beamformer_kernels.cuh" />
+    <ClInclude Include="src\image_processing\image_processor.h" />
+    <ClInclude Include="src\image_processing\kernels\block_match_kernels.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\beamformer\beamformer.cu" />
@@ -83,5 +85,7 @@
     <CudaCompile Include="src\rf_processing\data_conversion\data_converter.cu" />
     <CudaCompile Include="src\beamformer\kernels\beamformer_kernels.cu" />
     <CudaCompile Include="src\beamformer\kernels\other_beamformers.cu" />
+    <CudaCompile Include="src\image_processing\image_processor.cpp" />
+    <CudaCompile Include="src\image_processing\kernels\block_match_kernels.cu" />
   </ItemGroup>
 </Project>
