@@ -127,7 +127,7 @@ namespace bf_kernels::utils
         cuComplex partial_sum = { 0.0f, 0.0f };
         // Each thread processes elements starting at its index and strides by the block size.
         for (int i = tid; i < channel_count; i += blockDim.x) {
-            partial_sum = ADD_F2( sharedVals[i], partial_sum);
+            partial_sum = ADD_V2( sharedVals[i], partial_sum);
         }
 
         __shared__ cuComplex aux[MAX_TX_COUNT];
@@ -138,7 +138,7 @@ namespace bf_kernels::utils
         // Since blockDim.x is 128, we reduce until we have one value.
         for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
             if (tid < stride) {
-                aux[tid] = ADD_F2(aux[tid], aux[tid + stride]);
+                aux[tid] = ADD_V2(aux[tid], aux[tid + stride]);
             }
             __syncthreads();
         }

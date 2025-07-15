@@ -75,7 +75,7 @@ walsh_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard
 
 				value = SCALE_F2(value, hadamard_value);
 
-				total = ADD_F2(total, value);
+				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_F2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
@@ -176,7 +176,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
 				value = SCALE_F2(value, hadamard_value);
 
-				total = ADD_F2(total, value);
+				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_F2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
@@ -268,7 +268,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
 				value = SCALE_F2(value, hadamard_value);
 
-				total = ADD_F2(total, value);
+				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_F2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;

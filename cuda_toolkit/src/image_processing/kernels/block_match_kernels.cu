@@ -115,28 +115,23 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 
 			//show_corr_map(d_output_buffer, valid_corr_dims);
 
-			uint2 max_index = find_peak(d_output_buffer, valid_corr_dims);
-			uint max_offset = max_index.y * valid_corr_dims.width + max_index.x;
-
-			uint2 no_shift_index = {tpl_col_id - src_col_id, tpl_row_id - src_row_id};
+			int2 no_shift_index = {(uint)tpl_col_id - src_col_id, (uint)tpl_row_id - src_row_id};
 			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
 		
-			std::cout << "Motion grid position: X " << j << ", Y " << i << "." << std::endl;
-			std::cout << "Template position: X " << tpl_col_id << ", Y " << tpl_row_id << "." << std::endl;
-			std::cout << "Source position: X " << src_col_id << ", Y " << src_row_id << "." << std::endl << std::endl;
+			int2 peak_pos = select_peak(d_output_buffer, valid_corr_dims, params, d_scratch_buffer, stream_context, no_shift_index);
 
-			std::cout << "No shift index: X " << no_shift_index.x << ", Y " << no_shift_index.y << "." << std::endl;
-			std::cout << "No shift value: " << sample_value<float>(d_output_buffer + no_shift_offset) << std::endl << std::endl;
-			std::cout << "Peak index: X " << max_index.x << ", Y " << max_index.y << "." << std::endl;
-			std::cout << "Peak value: " << sample_value<float>(d_output_buffer + max_offset) << std::endl << std::endl << std::endl;
-			if (status != NPP_SUCCESS)
+			if (peak_pos.x == INT_MIN || peak_pos.y == INT_MIN)
 			{
-				std::cerr << "NPP error during NCC comparison: " << status << std::endl;
+				std::cerr << "Error selecting peak position." << std::endl;
 				cudaFree(d_scratch_buffer);
 				cudaFree(d_output_buffer);
 				return false;
 			}
 
+			motion_map[i * motion_grid_dims.x + j] = peak_pos;
+
+			std::cout << "Motion at (" << j << ", " << i << "): "
+				<< "Peak Position: (" << peak_pos.x << ", " << peak_pos.y << ") " << std::endl;
 		}
 	}
 	
@@ -144,4 +139,70 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 	cudaFree(d_output_buffer);
 	return true;
 	
+}
+
+int2
+block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos)
+{
+	int *d_peak_x, *d_peak_y;
+	float *d_peak_value;
+	double *d_corr_mean, *d_corr_variance;
+	cudaMalloc((void**)&d_peak_x, sizeof(int));
+	cudaMalloc((void**)&d_peak_y, sizeof(int));
+	cudaMalloc((void**)&d_peak_value, sizeof(float));
+	cudaMalloc((void**)&d_corr_mean, sizeof(double));
+	cudaMalloc((void**)&d_corr_variance, sizeof(double));
+
+	int image_line_step = (int)dims.width * sizeof(float);
+	NppStatus status = nppiMaxIndx_32f_C1R_Ctx(d_corr_map, image_line_step, dims, d_scratch_buffer, d_peak_value, d_peak_x, d_peak_y, stream_context);
+
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "NPP error '"<< status <<"' during peak detection." << std::endl;
+		return { INT_MIN, INT_MIN };
+	}
+
+	status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, image_line_step, dims, d_scratch_buffer, d_corr_mean, d_corr_variance, stream_context);
+
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "NPP error '"<< status <<"' during mean/stddev calculation." << std::endl;
+		return { INT_MIN, INT_MIN };
+	}
+
+	float no_shift_value = sample_value<float>(d_corr_map + no_shift_pos.y * dims.width + no_shift_pos.x);
+
+	int2 peak_pos = { sample_value<int>(d_peak_x), sample_value<int>(d_peak_y) };
+	float peak_value = sample_value<float>(d_peak_value);
+
+	double corr_mean = sample_value<double>(d_corr_mean);
+	double corr_variance = sample_value<double>(d_corr_variance);
+	corr_variance *= corr_variance; // Convert stddev to variance
+
+	// Log the peak and no shift values, positions and variance
+	// std::cout << "Peak Value: " << peak_value << " at (" << peak_pos.x << ", " << peak_pos.y << ")" << std::endl;
+	// std::cout << "No Shift Value: " << no_shift_value << " at (" << no_shift_pos.x << ", " << no_shift_pos.y << ")" << std::endl;
+	// std::cout << "Correlation Mean: " << corr_mean <<  " Correlation Variance: " << corr_variance << std::endl;
+
+	// If the peak isn't much higher than the no-shift value, we reject motion
+	if (peak_value < no_shift_value * params.correlation_threshold)
+	{
+		peak_pos = { 0, 0 };
+		return peak_pos;
+	}
+
+	// If the correlation map is too uniform we can't trust the peak
+	if( corr_variance < params.min_patch_variance )
+	{
+		std::cerr << "Patch variance too low: " << corr_variance << std::endl;
+		return { 0, 0 };
+	}
+	peak_pos = SUB_V2(peak_pos, no_shift_pos);
+
+	cudaFree(d_peak_x);
+	cudaFree(d_peak_y);
+	cudaFree(d_peak_value);
+	cudaFree(d_corr_mean);
+	cudaFree(d_corr_variance);
+	return peak_pos;
 }

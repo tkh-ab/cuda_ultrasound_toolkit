@@ -60,7 +60,9 @@ typedef ptrdiff_t iptr;
 
 #define NORM_SQUARE_F2(v) ((v).x * (v).x + (v).y * (v).y)
 #define NORM_SQUARE_F3(v) ((v).x * (v).x + (v).y * (v).y + (v).z * (v).z)
-#define ADD_F2(v,u) {(v).x + (u).x, (v).y + (u).y}
+
+#define ADD_V2(v,u) {(v).x + (u).x, (v).y + (u).y}
+#define SUB_V2(v,u) {(v).x - (u).x, (v).y - (u).y}
 
 
 inline double hamming_coef(int n, int N)

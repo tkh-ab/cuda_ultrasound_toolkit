@@ -38,4 +38,7 @@ namespace block_match
 		return max_pos;
 	}
 
+	__host__ inline int2
+	select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos);
+
 };

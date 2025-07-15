@@ -87,7 +87,7 @@ namespace bf_kernels
                 value = SCALE_F2(value, apo);
 
 
-                total = ADD_F2(total, value);
+                total = ADD_V2(total, value);
                 total_used_channels++;
                 incoherent_sum += NORM_SQUARE_F2(value);
 
@@ -124,7 +124,7 @@ namespace bf_kernels
                 value = SCALE_F2(value, apo);
 
 
-                total = ADD_F2(total, value);
+                total = ADD_V2(total, value);
                 total_used_channels++;
                 incoherent_sum += NORM_SQUARE_F2(value);
 
@@ -207,7 +207,7 @@ namespace bf_kernels
                 value = SCALE_F2(value, apo);
 
                 incoherent_total += NORM_SQUARE_F2(value);
-                channel_total = ADD_F2(channel_total, value);
+                channel_total = ADD_V2(channel_total, value);
 
                 rx_vec.y += Beamformer_Constants.pitches.x;
             }

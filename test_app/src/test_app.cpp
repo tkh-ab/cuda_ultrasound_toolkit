@@ -170,8 +170,13 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 	_transfer_server->respond_ack();
 	// Process motion detection
 
-	uint output_size = params->motion_grid_spacing * params->motion_grid_spacing * sizeof(int) * 2;
-	if (output_size > _transfer_server->get_data_smem().size())
+	uint motion_grid_dims[2] = { 
+		(params->image_dims[0] + params->motion_grid_spacing - 1) / params->motion_grid_spacing, 
+		(params->image_dims[1] + params->motion_grid_spacing - 1) / params->motion_grid_spacing 
+	};
+	size_t motion_map_size = motion_grid_dims[0] * motion_grid_dims[1] * sizeof(int) * 2; 
+
+	if (motion_map_size > _transfer_server->get_data_smem().size())
 	{
 		std::cerr << "Error: Output size exceeds shared memory size." << std::endl;
 		_transfer_server->respond_error();
@@ -179,16 +184,15 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 	}
 
 	std::cout << "Returning result"<< std::endl;
-	output_size = 0;
-	u8* output_data = new u8[output_size];
+	u8* output_data = new u8[motion_map_size];
 
 	bool result = cuda_toolkit::motion_detection(
 		std::span<const u8>(data_buffer.data(), data_size),
-		std::span<u8>(output_data, output_size), // Placeholder for motion maps
+		std::span<u8>(output_data, motion_map_size), // Placeholder for motion maps
 		*params);
-	
-	_transfer_server->write_output_data(std::span<const u8>(output_data, output_size));
-	if (!_transfer_server->respond_success(output_size))
+
+	_transfer_server->write_output_data(std::span<const u8>(output_data, motion_map_size));
+	if (!_transfer_server->respond_success(motion_map_size))
 	{
 		std::cerr << "Error: Failed to respond with success." << std::endl;
 		return false;

@@ -81,7 +81,7 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 
 	bool result = block_match::compare_images(
 		d_input_images[0],
-		d_input_images[0],
+		d_input_images[1],
 		motion_map_span,
 		image_dims,
 		params,
