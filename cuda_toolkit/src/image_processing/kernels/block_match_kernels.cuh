@@ -9,7 +9,7 @@ namespace block_match
 	__host__ bool 
 	compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
-						std::span<int2> motion_map, 
+						int2* motion_map, 
 						uint2 image_dims, 
 						const NccMotionParameters& params,
 						NppStreamContext stream_context);

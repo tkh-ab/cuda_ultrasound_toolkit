@@ -33,62 +33,40 @@ ImageProcessor::_create_stream_context()
     return ctx;    
 }
 
-bool ImageProcessor::ncc_forward_match(std::span<const u8> input, 
-										std::span<u8> motion_maps, 
+bool ImageProcessor::ncc_forward_match(std::vector<PitchedArray<float>> &d_input_images, 
+										int2* motion_maps, 
 										const NccMotionParameters& params)
 {
+	size_t motion_map_count = params.motion_grid_dims[0] * params.motion_grid_dims[1];
 	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
-	uint image_count = params.frame_count;
+	uint reference_frame = params.reference_frame;
 
-	size_t pixel_count = image_dims.x * image_dims.y;
-	size_t image_size = pixel_count * sizeof(float);
-
-
-	std::vector<PitchedArray<float>> d_input_images;
-	d_input_images.reserve(image_count);
-
-	for (uint i = 0; i < image_count; i++)
+	bool result = false;
+	for( uint i = 0; i < d_input_images.size(); ++i)
 	{
-		float* d_image = nullptr;
-		size_t image_pitch = 0;
-		CUDA_RETURN_IF_ERROR(cudaMallocPitch((void**)&d_image, &image_pitch, image_dims.x * sizeof(float), image_dims.y));
-		CUDA_RETURN_IF_ERROR(cudaMemcpy2D(d_image, image_pitch, 
-										   input.data() + i * image_size, 
-										   image_dims.x * sizeof(float), 
-										   image_dims.x * sizeof(float), 
-										   image_dims.y, 
-										   cudaMemcpyHostToDevice));
-		d_input_images.emplace_back(d_image, image_pitch, uint3(image_dims.x, image_dims.y, 1));
+		std::cout << "Processing frame " << i << std::endl;
+
+		auto start = std::chrono::high_resolution_clock::now();
+		if( i == reference_frame ) continue;
+
+		int2 *current_map = motion_maps + i * motion_map_count;
+
+		result &= block_match::compare_images( 	d_input_images[i],
+												d_input_images[reference_frame],
+												current_map,
+												image_dims,
+												params,
+												_stream_context
+											);
+
+
+		auto end = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> elapsed = end - start;
+    	std::cout << "Block match duration: " << elapsed.count() << " seconds" << std::endl << std::endl;
 	}
+
 	
 
-	float* d_src_image = nullptr;
-	float* d_tpl_image = nullptr;
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_src_image, image_size));
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_tpl_image, image_size));
-
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_src_image, input.data(), image_size, cudaMemcpyHostToDevice));
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data(), image_size, cudaMemcpyHostToDevice));
-
-
-	uint2 motion_grid_dims = { params.motion_grid_dims[0], params.motion_grid_dims[1] };
-
-	size_t motion_map_size = motion_grid_dims.x * motion_grid_dims.y * sizeof(int2);
-	size_t motion_map_count = motion_grid_dims.x * motion_grid_dims.y;
-
-	std::span<int2> motion_map_span(reinterpret_cast<int2*>(motion_maps.data()), motion_map_count);
-
-	bool result = block_match::compare_images(
-		d_input_images[0],
-		d_input_images[1],
-		motion_map_span,
-		image_dims,
-		params,
-		_stream_context
-	);
-
-	cudaFree(d_src_image);
-	cudaFree(d_tpl_image);
 	return result;
 }
 

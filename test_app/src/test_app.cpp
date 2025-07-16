@@ -175,7 +175,7 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 		params->motion_grid_dims[1]
 	};
 
-	size_t motion_map_size = motion_grid_dims[0] * motion_grid_dims[1] * sizeof(int) * 2; 
+	size_t motion_map_size = motion_grid_dims[0] * motion_grid_dims[1] * sizeof(int) * 2 * params->frame_count; 
 
 	if (motion_map_size > _transfer_server->get_data_smem().size())
 	{
@@ -183,9 +183,14 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 		_transfer_server->respond_error();
 		return false;
 	}
+	u8* output_data = (u8*)std::calloc(motion_map_size, 1);
 
-	std::cout << "Returning result"<< std::endl;
-	u8* output_data = new u8[motion_map_size];
+	if (!output_data)
+	{
+		std::cerr << "Error: Failed to allocate output buffer." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
 
 	bool result = cuda_toolkit::motion_detection(
 		std::span<const u8>(data_buffer.data(), data_size),

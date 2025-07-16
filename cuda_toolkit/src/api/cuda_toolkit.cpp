@@ -183,6 +183,33 @@ cuda_toolkit::motion_detection(std::span<const uint8_t> images,
 								  std::span<uint8_t> motion_maps,
 								  const NccMotionParameters& params)
 {
+	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
+	uint image_count = params.frame_count;
+
+	size_t pixel_count = image_dims.x * image_dims.y;
+	size_t image_size = pixel_count * sizeof(float);
+
+	std::vector<PitchedArray<float>> d_input_images;
+	d_input_images.reserve(image_count);
+
+	for (uint i = 0; i < image_count; i++)
+	{
+		float* d_image = nullptr;
+		size_t image_pitch = 0;
+
+		// The pitched array destructor will clear this.
+		CUDA_RETURN_IF_ERROR(cudaMallocPitch((void**)&d_image, &image_pitch, image_dims.x * sizeof(float), image_dims.y));
+		CUDA_RETURN_IF_ERROR(cudaMemcpy2D(d_image, image_pitch, 
+										   images.data() + i * image_size, 
+										   image_dims.x * sizeof(float), 
+										   image_dims.x * sizeof(float), 
+										   image_dims.y, 
+										   cudaMemcpyHostToDevice));
+		d_input_images.emplace_back(d_image, image_pitch, uint3(image_dims.x, image_dims.y, 1));
+	}
+
 	auto& image_processor = get_image_processor();
-	return image_processor.ncc_forward_match(images, motion_maps, params);
+	bool result = image_processor.ncc_forward_match(d_input_images, reinterpret_cast<int2*>(motion_maps.data()), params);
+
+	return result;
 }

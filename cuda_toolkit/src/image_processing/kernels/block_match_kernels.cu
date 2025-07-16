@@ -27,7 +27,7 @@ show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
 bool
 block_match::compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
-						std::span<int2> motion_map, 
+						int2* motion_map, 
 						uint2 image_dims, 
 						const NccMotionParameters& params,
 						NppStreamContext stream_context)
@@ -47,7 +47,6 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 
 	uint2 motion_grid_dims = { params.motion_grid_dims[0], params.motion_grid_dims[1] };
 
-	
 	size_t scratch_buffer_size;
 	
 	NppStatus status = nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(src_roi, &scratch_buffer_size, stream_context);
@@ -171,10 +170,10 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 
 			motion_map[i * motion_grid_dims.x + j] = motion_vector;
 
-			std::cout << "Motion at (" << j << ", " << i << "): "
-				<< "Peak Position: (" << peak_pos.x << ", " << peak_pos.y << ") "
-				<< "Motion Vector: (" << motion_vector.x << ", " << motion_vector.y << ")" << std::endl;
-			std::cout << std::endl;
+			// std::cout << "Motion at (" << j << ", " << i << "): "
+			// 	<< "Peak Position: (" << peak_pos.x << ", " << peak_pos.y << ") "
+			// 	<< "Motion Vector: (" << motion_vector.x << ", " << motion_vector.y << ")" << std::endl;
+			// std::cout << std::endl;
 		}
 	}
 	

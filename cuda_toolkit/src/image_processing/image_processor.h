@@ -19,8 +19,8 @@ public:
         _stream_context = _create_stream_context();
     }
 
-    bool ncc_forward_match(std::span<const u8> input, 
-                            std::span<u8> motion_maps, 
+    bool ncc_forward_match( std::vector<PitchedArray<float>>& d_input_images, 
+                            int2* motion_maps, 
                             const NccMotionParameters& params);
 
     bool svd_filter(std::span<const cuComplex> input, 
