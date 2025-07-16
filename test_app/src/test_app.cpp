@@ -170,10 +170,11 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 	_transfer_server->respond_ack();
 	// Process motion detection
 
-	uint motion_grid_dims[2] = { 
-		(params->image_dims[0] + params->motion_grid_spacing - 1) / params->motion_grid_spacing, 
-		(params->image_dims[1] + params->motion_grid_spacing - 1) / params->motion_grid_spacing 
+	uint motion_grid_dims[2] = {
+		params->motion_grid_dims[0],
+		params->motion_grid_dims[1]
 	};
+
 	size_t motion_map_size = motion_grid_dims[0] * motion_grid_dims[1] * sizeof(int) * 2; 
 
 	if (motion_map_size > _transfer_server->get_data_smem().size())

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cuda_lib_header_path="../../cuda_toolkit/include"
+cuda_lib_header_path="../../cuda_toolkit/src/public"
 output_dir="output"
 mkdir -p ${output_dir}
 

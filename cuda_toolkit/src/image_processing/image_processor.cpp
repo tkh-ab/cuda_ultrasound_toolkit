@@ -71,8 +71,7 @@ bool ImageProcessor::ncc_forward_match(std::span<const u8> input,
 	CUDA_RETURN_IF_ERROR(cudaMemcpy(d_tpl_image, input.data(), image_size, cudaMemcpyHostToDevice));
 
 
-	uint2 motion_grid_dims = { image_dims.x / params.motion_grid_spacing, 
-							   image_dims.y / params.motion_grid_spacing };
+	uint2 motion_grid_dims = { params.motion_grid_dims[0], params.motion_grid_dims[1] };
 
 	size_t motion_map_size = motion_grid_dims.x * motion_grid_dims.y * sizeof(int2);
 	size_t motion_map_count = motion_grid_dims.x * motion_grid_dims.y;
