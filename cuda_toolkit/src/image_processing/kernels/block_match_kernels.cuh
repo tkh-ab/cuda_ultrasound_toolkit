@@ -16,11 +16,11 @@ namespace block_match
 
 
 
-	__host__ inline uint2
+	__host__ inline int2
 	find_peak(const float* d_corr_map, NppiSize dims)
 	{
 		float max_val = -1.0f;
-		uint2 max_pos = { 0, 0 };
+		int2 max_pos = { 0, 0 };
 
 		for (int y = 0; y < dims.height; ++y)
 		{
@@ -30,7 +30,7 @@ namespace block_match
 				if (val > max_val)
 				{
 					max_val = val;
-					max_pos = { (uint)x, (uint)y };
+					max_pos = { x, y };
 				}
 			}
 		}

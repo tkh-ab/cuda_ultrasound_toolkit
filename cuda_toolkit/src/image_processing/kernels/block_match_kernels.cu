@@ -2,16 +2,20 @@
 
 
 __host__ static inline void 
-show_corr_map(const float* d_corr_map, NppiSize dims)
+show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
 {
-	float* corr_map = new float[dims.width * dims.height];
-	cudaMemcpy(corr_map, d_corr_map, dims.width * dims.height * sizeof(float), cudaMemcpyDeviceToHost);
-	std::cout << "Correlation Map:" << std::endl;
+	int row_offset;
+	if (line_step == 0) {row_offset = dims.width;}
+	else 				{row_offset = line_step / sizeof(float);}
+
+	float* corr_map = new float[dims.width];
+	
 	for (int y = 0; y < dims.height; ++y)
 	{
+		cudaMemcpy(corr_map, d_corr_map + y * row_offset, dims.width * sizeof(float), cudaMemcpyDeviceToHost);
 		for (int x = 0; x < dims.width; ++x)
 		{
-			std::cout << std::showpos << std::fixed << std::setprecision(3) << corr_map[y * dims.width + x] << ' ';
+			std::cout << std::showpos << std::scientific << std::setprecision(2) << corr_map[x] << ' ';
 		}
 		std::cout << std::endl;
 	}
@@ -33,7 +37,9 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 	NppiSize src_roi = { tpl_roi.width + (int)params.search_margins[0] * 2, 
 							tpl_roi.height + (int)params.search_margins[1] * 2 };
 
-	int image_line_step = (int)image_dims.x * sizeof(float);
+	
+	int template_line_step = template_image.pitch;
+	int source_line_step = source_image.pitch;
 
 	uint2 motion_grid_dims = { image_dims.x / params.motion_grid_spacing, 
 							   image_dims.y / params.motion_grid_spacing };
@@ -109,16 +115,30 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 			
 
 			// Perform the NCC comparison
-			status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, image_line_step, current_src_roi, 
-													template_corner, image_line_step, tpl_roi, 
+			status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, current_src_roi, 
+													template_corner, template_line_step, tpl_roi, 
 													d_output_buffer, valid_corr_line_step, d_scratch_buffer, stream_context);
+			// if (i == 0 && j == 0)
+			// {
+			// 	std::cout << "Template: " << std::endl;
+			// 	show_corr_map(template_corner, tpl_roi, template_line_step);
+			// 	std::cout << std::endl << "Source: " << std::endl;
+			// 	show_corr_map(source_corner, current_src_roi, source_line_step);
 
-			//show_corr_map(d_output_buffer, valid_corr_dims);
+			// 	std::cout << std::endl << "NCC comparison output: " << status << std::endl;
+			// 	show_corr_map(d_output_buffer, valid_corr_dims);
+			// 	std::cout << std::endl;
+			// }
+			
 
 			int2 no_shift_index = {(uint)tpl_col_id - src_col_id, (uint)tpl_row_id - src_row_id};
 			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
 		
 			int2 peak_pos = select_peak(d_output_buffer, valid_corr_dims, params, d_scratch_buffer, stream_context, no_shift_index);
+
+			int2 other_peak = find_peak(d_output_buffer, valid_corr_dims);
+
+			other_peak = SUB_V2(other_peak, no_shift_index);
 
 			if (peak_pos.x == INT_MIN || peak_pos.y == INT_MIN)
 			{
@@ -132,6 +152,10 @@ block_match::compare_images(const PitchedArray<float>& template_image,
 
 			std::cout << "Motion at (" << j << ", " << i << "): "
 				<< "Peak Position: (" << peak_pos.x << ", " << peak_pos.y << ") " << std::endl;
+
+			// std::cout << "Other Peak Position: (" << other_peak.x << ", " << other_peak.y << ") " << std::endl;
+
+			std::cout << std::endl;
 		}
 	}
 	
