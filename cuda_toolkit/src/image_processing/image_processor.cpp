@@ -61,8 +61,8 @@ bool ImageProcessor::ncc_forward_match(std::vector<PitchedArray<float>> &d_input
 
 		int2 *current_map = motion_maps + i * motion_map_count;
 
-		result &= _compare_images( 	d_input_images[i],
-												d_input_images[reference_frame],
+		result &= _compare_images( 	d_input_images[reference_frame],
+												d_input_images[i],
 												current_map,
 												image_dims,
 												params

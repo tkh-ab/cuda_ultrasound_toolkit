@@ -60,13 +60,13 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 		return { INT_MIN, INT_MIN };
 	}
 
-	status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, image_line_step, dims, scratch_stack, &d_stats->corr_mean, &d_stats->corr_std, stream_context);
+	// status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, image_line_step, dims, scratch_stack, &d_stats->corr_mean, &d_stats->corr_std, stream_context);
 
-	if (status != NPP_SUCCESS)
-	{
-		std::cerr << "NPP error '"<< status <<"' during mean/stddev calculation." << std::endl;
-		return { INT_MIN, INT_MIN };
-	}
+	// if (status != NPP_SUCCESS)
+	// {
+	// 	std::cerr << "NPP error '"<< status <<"' during mean/stddev calculation." << std::endl;
+	// 	return { INT_MIN, INT_MIN };
+	// }
 
 	Stats c_stats = sample_value<Stats>(d_stats);
 	float no_shift_value = sample_value<float>(d_corr_map + no_shift_pos.y * dims.width + no_shift_pos.x);
@@ -74,11 +74,11 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 	int2 true_peak_pos = c_stats.peak_pos;
 	float true_peak_value = c_stats.peak_value;
 
-	if(abs(c_stats.min_peak_value) > abs(c_stats.peak_value))
-	{
-		true_peak_value = abs(c_stats.min_peak_value);
-		true_peak_pos = c_stats.min_peak_pos;
-	}
+	// if(abs(c_stats.min_peak_value) > abs(c_stats.peak_value))
+	// {
+	// 	true_peak_value = abs(c_stats.min_peak_value);
+	// 	true_peak_pos = c_stats.min_peak_pos;
+	// }
 
 	double corr_variance = c_stats.corr_std * c_stats.corr_std;
 
