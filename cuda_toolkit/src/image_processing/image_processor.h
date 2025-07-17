@@ -33,7 +33,40 @@ private:
         // Creates the context for the default cuda stream
         NppStreamContext _create_stream_context();
 
+		bool 
+		_compare_images(const PitchedArray<float>& template_image,
+							const PitchedArray<float>& source_image,
+							int2* motion_map,
+							uint2 image_dims,
+							const NccMotionParameters& params);
+
+		bool
+		_create_buffers(NppiSize src_size, NppiSize tpl_size);
+
+		void
+		_cleanup_buffers()
+		{
+			if (_d_scratch_buffer)
+			{
+				cudaFree(_d_scratch_buffer);
+				_d_scratch_buffer = nullptr;
+			}
+			if (_d_corr_map)
+			{
+				cudaFree(_d_corr_map);
+				_d_corr_map = nullptr;
+			}
+			_scratch_buffer_size = 0;
+			_corr_map_size = 0;
+		}
+
         NppStreamContext _stream_context;
+
+		u8* _d_scratch_buffer = nullptr;
+		size_t _scratch_buffer_size = 0;
+
+		float* _d_corr_map = nullptr;
+		size_t _corr_map_size = 0;
     
 };
 
