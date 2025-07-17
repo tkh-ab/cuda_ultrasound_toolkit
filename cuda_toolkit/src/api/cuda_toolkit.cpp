@@ -208,8 +208,9 @@ cuda_toolkit::motion_detection(std::span<const uint8_t> images,
 		d_input_images.emplace_back(d_image, image_pitch, uint3(image_dims.x, image_dims.y, 1));
 	}
 
+	cudaDeviceSynchronize();
 	auto& image_processor = get_image_processor();
-	bool result = image_processor.ncc_forward_match(d_input_images, reinterpret_cast<int2*>(motion_maps.data()), params);
+	bool result = image_processor.ncc_block_match(d_input_images, reinterpret_cast<int2*>(motion_maps.data()), params);
 
 	return result;
 }

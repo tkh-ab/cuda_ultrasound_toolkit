@@ -33,7 +33,7 @@ ImageProcessor::_create_stream_context()
     return ctx;    
 }
 
-bool ImageProcessor::ncc_forward_match(std::vector<PitchedArray<float>> &d_input_images, 
+bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_images, 
 										int2* motion_maps, 
 										const NccMotionParameters& params)
 {
@@ -188,7 +188,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			//show_corr_map(d_output_buffer, valid_corr_dims, corr_line_step);
 
 			auto peak_start = std::chrono::high_resolution_clock::now();
-			int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index);
+			int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
 			cudaDeviceSynchronize();
 			auto peak_end = std::chrono::high_resolution_clock::now();
 			peak_duration += (peak_end - peak_start);

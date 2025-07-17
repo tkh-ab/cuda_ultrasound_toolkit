@@ -25,7 +25,7 @@ show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
 
 
 int2
-block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos)
+block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos, int line_step)
 {
 
 	struct Stats
@@ -43,8 +43,7 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 	Stats *d_stats = (Stats *)scratch_stack;
 	scratch_stack += sizeof(Stats);
 
-	int image_line_step = (int)dims.width * sizeof(float);
-	NppStatus status = nppiMaxIndx_32f_C1R_Ctx(d_corr_map, image_line_step, dims, scratch_stack, &d_stats->peak_value, &d_stats->peak_pos.x, &d_stats->peak_pos.y, stream_context);
+	NppStatus status = nppiMaxIndx_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->peak_value, &d_stats->peak_pos.x, &d_stats->peak_pos.y, stream_context);
 
 	if (status != NPP_SUCCESS)
 	{
@@ -52,7 +51,7 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 		return { INT_MIN, INT_MIN };
 	}
 
-	status = nppiMinIndx_32f_C1R_Ctx(d_corr_map, image_line_step, dims, scratch_stack, &d_stats->min_peak_value, &d_stats->min_peak_pos.x, &d_stats->min_peak_pos.y, stream_context);
+	status = nppiMinIndx_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->min_peak_value, &d_stats->min_peak_pos.x, &d_stats->min_peak_pos.y, stream_context);
 
 	if (status != NPP_SUCCESS)
 	{

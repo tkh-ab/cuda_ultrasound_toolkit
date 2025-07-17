@@ -19,7 +19,7 @@ public:
         _stream_context = _create_stream_context();
     }
 
-    bool ncc_forward_match( std::vector<PitchedArray<float>>& d_input_images, 
+    bool ncc_block_match( std::vector<PitchedArray<float>>& d_input_images, 
                             int2* motion_maps, 
                             const NccMotionParameters& params);
 
