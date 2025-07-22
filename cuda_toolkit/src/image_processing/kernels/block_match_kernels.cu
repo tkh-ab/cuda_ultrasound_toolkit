@@ -1,29 +1,6 @@
 #include "block_match_kernels.cuh"
 
 
-__host__ static inline void 
-show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
-{
-	int row_offset;
-	if (line_step == 0) {row_offset = dims.width;}
-	else 				{row_offset = line_step / sizeof(float);}
-
-	float* corr_map = new float[dims.width];
-	
-	for (int y = 0; y < dims.height; ++y)
-	{
-		cudaMemcpy(corr_map, d_corr_map + y * row_offset, dims.width * sizeof(float), cudaMemcpyDeviceToHost);
-		for (int x = 0; x < dims.width; ++x)
-		{
-			std::cout << std::showpos << std::scientific << std::setprecision(2) << corr_map[x] << ' ';
-		}
-		std::cout << std::endl;
-	}
-	std::cout << std::endl;
-	delete[] corr_map;
-}
-
-
 int2
 block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos, int line_step)
 {
@@ -51,21 +28,21 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 		return { INT_MIN, INT_MIN };
 	}
 
-	status = nppiMinIndx_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->min_peak_value, &d_stats->min_peak_pos.x, &d_stats->min_peak_pos.y, stream_context);
-
-	if (status != NPP_SUCCESS)
-	{
-		std::cerr << "NPP error '"<< status <<"' during peak detection." << std::endl;
-		return { INT_MIN, INT_MIN };
-	}
-
-	// status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, image_line_step, dims, scratch_stack, &d_stats->corr_mean, &d_stats->corr_std, stream_context);
+	// status = nppiMinIndx_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->min_peak_value, &d_stats->min_peak_pos.x, &d_stats->min_peak_pos.y, stream_context);
 
 	// if (status != NPP_SUCCESS)
 	// {
-	// 	std::cerr << "NPP error '"<< status <<"' during mean/stddev calculation." << std::endl;
+	// 	std::cerr << "NPP error '"<< status <<"' during peak detection." << std::endl;
 	// 	return { INT_MIN, INT_MIN };
 	// }
+
+	status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->corr_mean, &d_stats->corr_std, stream_context);
+
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "NPP error '"<< status <<"' during mean/stddev calculation." << std::endl;
+		return { INT_MIN, INT_MIN };
+	}
 
 	Stats c_stats = sample_value<Stats>(d_stats);
 	float no_shift_value = sample_value<float>(d_corr_map + no_shift_pos.y * dims.width + no_shift_pos.x);

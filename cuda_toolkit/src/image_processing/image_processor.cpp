@@ -6,7 +6,27 @@
 #include "image_processor.h"
 
 
+static inline void 
+show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
+{
+	int row_offset;
+	if (line_step == 0) {row_offset = dims.width;}
+	else 				{row_offset = line_step / sizeof(float);}
 
+	float* corr_map = new float[dims.width];
+	
+	for (int y = 0; y < dims.height; ++y)
+	{
+		cudaMemcpy(corr_map, d_corr_map + y * row_offset, dims.width * sizeof(float), cudaMemcpyDeviceToHost);
+		for (int x = 0; x < dims.width; ++x)
+		{
+			std::cout << std::showpos << std::scientific << std::setprecision(2) << corr_map[x] << ' ';
+		}
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+	delete[] corr_map;
+}
 
 NppStreamContext 
 ImageProcessor::_create_stream_context() 
@@ -61,8 +81,8 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 
 		int2 *current_map = motion_maps + i * motion_map_count;
 
-		result &= _compare_images( 	d_input_images[reference_frame],
-												d_input_images[i],
+		result &= _compare_images( 	d_input_images[i],
+												d_input_images[reference_frame],
 												current_map,
 												image_dims,
 												params
@@ -117,7 +137,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 		{
 			// Shrink the ROI and set the new corner
 			row_src_roi.height += src_row_id;
-			src_row_id = 0;
+			src_row_id = 0; // marking the new corner
 		}
 
 		if( t_bot_overflow > 0 )
@@ -149,7 +169,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			{
 				// Shrink the ROI and set the new corner
 				current_src_roi.width += src_col_id;
-				src_col_id = 0;
+				src_col_id = 0; // marking the new corner
 			}
 
 			if ( t_right_overflow > 0 )
@@ -182,10 +202,10 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			auto corr_end = std::chrono::high_resolution_clock::now();
 			corr_duration += (corr_end - corr_start);
 
-			int2 no_shift_index = {(uint)tpl_col_id - src_col_id, (uint)tpl_row_id - src_row_id};
+			int2 no_shift_index = {(int)tpl_col_id - src_col_id, (int)tpl_row_id - src_row_id};
 			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
 		
-			//show_corr_map(d_output_buffer, valid_corr_dims, corr_line_step);
+			//show_corr_map(_d_corr_map, valid_corr_dims, corr_line_step);
 
 			auto peak_start = std::chrono::high_resolution_clock::now();
 			int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
