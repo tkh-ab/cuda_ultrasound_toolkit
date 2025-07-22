@@ -1,7 +1,9 @@
 
 #include <format>
+#include <chrono>
+#include <algorithm>
 
-#include "kernels/block_match_kernels.cuh"
+#include "kernels/block_match.h"
 
 #include "image_processor.h"
 
@@ -195,10 +197,17 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			// Perform the NCC comparison
 
 			auto corr_start = std::chrono::high_resolution_clock::now();
-			NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, current_src_roi, 
+			volatile NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, current_src_roi, 
 													template_corner, template_line_step, current_tpl_roi, 
 													_d_corr_map, corr_line_step, _d_scratch_buffer, _stream_context);
 			cudaDeviceSynchronize();
+			if (status != NPP_SUCCESS)
+			{
+				std::cerr << "Cross-correlation failed with status: " << status << std::endl;
+				return false;
+			}
+
+
 			auto corr_end = std::chrono::high_resolution_clock::now();
 			corr_duration += (corr_end - corr_start);
 
@@ -208,8 +217,12 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			//show_corr_map(_d_corr_map, valid_corr_dims, corr_line_step);
 
 			auto peak_start = std::chrono::high_resolution_clock::now();
-			int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
+			//int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
+
+			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, _d_scratch_buffer);
 			cudaDeviceSynchronize();
+
+			motion_vector = SUB_V2(motion_vector, no_shift_index);
 			auto peak_end = std::chrono::high_resolution_clock::now();
 			peak_duration += (peak_end - peak_start);
 
@@ -247,8 +260,11 @@ ImageProcessor::_create_buffers(NppiSize src_size, NppiSize tpl_size)
 		return false;
 	}
 
+	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
+
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_scratch_buffer, scratch_buffer_size));
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_corr_map, valid_corr_size)); 
+	_scratch_buffer_size = scratch_buffer_size;
+	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_corr_map, valid_corr_size));
 
 	return true;
 }

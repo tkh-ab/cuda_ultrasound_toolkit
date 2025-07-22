@@ -30,6 +30,8 @@ public:
 
 private:
 
+		static constexpr size_t Min_Scratch_Buffer_Size = 1024 * 8; // 8 KB
+
         // Creates the context for the default cuda stream
         NppStreamContext _create_stream_context();
 
