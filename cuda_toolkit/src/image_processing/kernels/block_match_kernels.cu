@@ -98,55 +98,50 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	float no_shift_value = sample_value<float>(d_corr_map + no_shift_offset);
 	float threshold = no_shift_value * params.correlation_threshold;
 
+	threshold = threshold > 0.0f ? threshold : 0.0f;
+
 	uint patch_cols = (uint)ceilf((float)dims.width / (float)Peak_Detect_Block_Dims.x);
 	uint patch_rows = (uint)ceilf((float)dims.height / (float)Peak_Detect_Block_Dims.y);
 
 	uint total_patches = patch_cols * patch_rows;
 
 	// Based and arena-pilled
-	//float* d_peak_values = (float*)d_scratch_buffer;
-	//int2* d_peak_positions = (int2*)(d_scratch_buffer + total_patches * sizeof(float));
-
-	float* d_peak_values;
-	int2* d_peak_positions;
-
-	volatile cudaError_t err = cudaMalloc((void**)&d_peak_values, total_patches * sizeof(float));
-	if (err != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak values allocation: " << cudaGetErrorString(err) << std::endl;
-		return no_shift_pos;
-	}
-	err = cudaMalloc((void**)&d_peak_positions, total_patches * sizeof(int2));
-	if (err != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak positions allocation: " << cudaGetErrorString(err) << std::endl;
-		cudaFree(d_peak_values);
-		return no_shift_pos;
-	}
+	
+	int2* d_peak_positions = (int2*)d_scratch_buffer;
+	float* d_peak_values = (float*)d_scratch_buffer + total_patches * sizeof(int2);
 
 	dim3 block_dims = { Peak_Detect_Block_Dims.x, Peak_Detect_Block_Dims.y, 1 };
 	dim3 grid_dims = { patch_cols, patch_rows, 1 };
 
+	// Print all parameter of the call
+	//std::cout << "Grid Dims: " << grid_dims.x << " x " << grid_dims.y << ", Block Dims: " << block_dims.x << " x " << block_dims.y << std::endl;
+	//std::cout << "Total Patches: " << total_patches << std::endl;
+	//std::cout << "Threshold: " << threshold << ", No Shift Value: " << no_shift_value << std::endl;
+	//std::cout << "Row Pitch: " << row_pitch << ", Line Step: " << line_step << std::endl;
+
+	//// And pointer address sanity check
+	//std::cout << "d_corr_map: " << d_corr_map << ", d_peak_values: " << d_peak_values << ", d_peak_positions: " << d_peak_positions << std::endl;
+
 	kernels::find_local_peaks_kernel<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, threshold, d_peak_values, d_peak_positions);
 
+	volatile cudaError_t err = cudaDeviceSynchronize();
+	if (err != cudaSuccess)
+	{
+		std::cerr << "CUDA error during peak detection synchronization: " << err << std::endl;
+		return no_shift_pos;
+	}
+
 	err = cudaGetLastError();
-	
-	
 	if (err != cudaSuccess)
 	{
-		std::cerr << "CUDA error during peak detection: " << err << std::endl;
+		std::cerr << "CUDA error during peak detection: " << err << std::endl << std::endl;
 		return no_shift_pos;
 	}
 
-	err = cudaDeviceSynchronize();
-	if (err != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak detection synchronization: " << cudaGetErrorString(err) << std::endl;
-		return no_shift_pos;
-	}
+	
 
-	block_dims = { 8, 1, 1 };
-	grid_dims = {total_patches, 1, 1};
+	//block_dims = { 8, 1, 1 };
+	//grid_dims = {total_patches, 1, 1};
 
 	float min_prominence = 0.1f;
 	float max_width = 3.0f;
@@ -160,22 +155,23 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	// 	return no_shift_pos;
 	// }
 
-	//thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
-	//thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
-	//thrust::sort_by_key(d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
+	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
+	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
+	thrust::sort_by_key(d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
 
-	// float* cpu_peak_values = new float[total_patches];
-	// cudaMemcpy(cpu_peak_values, d_peak_values, total_patches * sizeof(float), cudaMemcpyDeviceToHost);
-	// int2* cpu_peak_positions = new int2[total_patches];
-	// cudaMemcpy(cpu_peak_positions, d_peak_positions, total_patches * sizeof(int2), cudaMemcpyDeviceToHost);
+	 //float* cpu_peak_values = new float[total_patches];
+	 //cudaMemcpy(cpu_peak_values, d_peak_values, total_patches * sizeof(float), cudaMemcpyDeviceToHost);
+	 //int2* cpu_peak_positions = new int2[total_patches];
+	 //cudaMemcpy(cpu_peak_positions, d_peak_positions, total_patches * sizeof(int2), cudaMemcpyDeviceToHost);
 
-	// //print_peak_positions(cpu_peak_positions, cpu_peak_values, total_patches);
-	// delete[] cpu_peak_values;
-	// delete[] cpu_peak_positions;
+	 ////print_peak_positions(cpu_peak_positions, cpu_peak_values, total_patches);
+	 //delete[] cpu_peak_values;
+	 //delete[] cpu_peak_positions;
 
-	cudaFree(d_peak_values);
-	cudaFree(d_peak_positions);
-
+	if(sample_value<float>(d_peak_values) < threshold)
+	{
+		return no_shift_pos; // No valid peaks found
+	}
 	return sample_value<int2>(d_peak_positions);
 
 }
@@ -194,30 +190,16 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 	float value = d_corr_map[pixel_pos.y * line_step + pixel_pos.x];
 
 	// Thread 0 in the warp will have the maximum value
-	//warp_reduce_max(&value, reinterpret_cast<i64*>(&pixel_pos));
+	warp_reduce_max(&value, reinterpret_cast<i64*>(&pixel_pos));
 
-	//i64* pos = reinterpret_cast<i64*>(&pixel_pos);
-
-	//static constexpr unsigned mask = 0xffffffffu;
-	//static constexpr int warp_size = 32;
-	////#pragma unroll
-	//for (int offset = warp_size / 2; offset > 0; offset /= 2)
-	//{
-	//	float v2 = __shfl_down_sync(mask, value, offset);
-	//	i64  p2 = __shfl_down_sync(mask, *pos, offset);
-	//	if (v2 > value)
-	//	{
-	//		value = v2;
-	//		*pos = p2;
-	//	}
-	//}
+	i64* pos = reinterpret_cast<i64*>(&pixel_pos);
 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
 	{
-		// if( value < threshold )
-		// {
-		// 	value = -1.0f;
-		// }
+		if( value < threshold )
+		{
+		value = -1.0f;
+		}
 		peak_values[blockIdx.x + blockIdx.y * gridDim.x] = value;
 		peak_positions[blockIdx.x + blockIdx.y * gridDim.x] = pixel_pos;
 	}

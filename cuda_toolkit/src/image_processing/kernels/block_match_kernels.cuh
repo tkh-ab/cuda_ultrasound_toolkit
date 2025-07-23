@@ -18,7 +18,7 @@ namespace block_match::kernels
 	{
 		static constexpr unsigned mask = 0xffffffffu;
 		static constexpr int warp_size = 32;
-		//#pragma unroll
+		#pragma unroll
 		for (int offset = warp_size / 2; offset > 0; offset /= 2)
 		{
 			float v2 = __shfl_down_sync(mask, *val, offset);

@@ -123,6 +123,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 
 	int y_margin = params.search_margins[1];
 	int x_margin = params.search_margins[0];
+	int count = 0;
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
 		uint tpl_row_id = i * params.motion_grid_spacing;
@@ -219,8 +220,14 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			auto peak_start = std::chrono::high_resolution_clock::now();
 			//int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
 
-			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, _d_scratch_buffer);
+			//std::cout << "I: " << i << ", J: " << j << std::endl;
+
+			u8* scratch_buffer;
+			cudaMalloc((void**)&scratch_buffer, _scratch_buffer_size);
+			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, scratch_buffer);
 			cudaDeviceSynchronize();
+
+			cudaFree(scratch_buffer);
 
 			motion_vector = SUB_V2(motion_vector, no_shift_index);
 			auto peak_end = std::chrono::high_resolution_clock::now();
@@ -262,6 +269,7 @@ ImageProcessor::_create_buffers(NppiSize src_size, NppiSize tpl_size)
 
 	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
 
+	std::cout << "Scratch buffer size: " << scratch_buffer_size << " bytes" << std::endl;
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_scratch_buffer, scratch_buffer_size));
 	_scratch_buffer_size = scratch_buffer_size;
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_corr_map, valid_corr_size));

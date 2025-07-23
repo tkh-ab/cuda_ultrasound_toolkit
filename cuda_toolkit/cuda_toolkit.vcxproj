@@ -162,6 +162,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <GenerateLineInfo>false</GenerateLineInfo>
       <FastMath>true</FastMath>
+      <Optimization>Od</Optimization>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -206,6 +207,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <GenerateLineInfo>true</GenerateLineInfo>
       <FastMath>true</FastMath>
       <HostDebugInfo>true</HostDebugInfo>
+      <Optimization>Od</Optimization>
     </CudaCompile>
     <CudaLink>
       <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
