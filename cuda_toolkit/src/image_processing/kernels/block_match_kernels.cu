@@ -138,22 +138,20 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 		return no_shift_pos;
 	}
 
-	
-
-	//block_dims = { 8, 1, 1 };
-	//grid_dims = {total_patches, 1, 1};
+	block_dims = { 1, 1, 1 };
+	grid_dims = {total_patches, 1, 1};
 
 	float min_prominence = 0.1f;
-	float max_width = 3.0f;
+	float min_sharpness = 0.5f;
 
-	// kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, line_step, d_peak_positions, d_peak_values, min_prominence, max_width);
+	kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, line_step, d_peak_positions, d_peak_values, min_prominence, min_sharpness);
 
-	// cudaDeviceSynchronize();
-	// if (cudaGetLastError() != cudaSuccess)
-	// {
-	// 	std::cerr << "CUDA error during peak testing: " << cudaGetErrorString(cudaGetLastError()) << std::endl;
-	// 	return no_shift_pos;
-	// }
+	cudaDeviceSynchronize();
+	if (cudaGetLastError() != cudaSuccess)
+	{
+		std::cerr << "CUDA error during peak testing: " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+		return no_shift_pos;
+	}
 
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
 	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
@@ -197,8 +195,8 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
 	{
 		if( value < threshold )
-		{
-		value = -1.0f;
+			{
+			value = -1.0f;
 		}
 		peak_values[blockIdx.x + blockIdx.y * gridDim.x] = value;
 		peak_positions[blockIdx.x + blockIdx.y * gridDim.x] = pixel_pos;
@@ -206,73 +204,104 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 
 }
 
-__device__ void 
-normalCholeskySolve(const float* A, const float* z,
-                         int N, int M,
-                         float* beta)
-{
-    // 1) Form AtA (M×M) and Atz (M)
-    // Allocate on stack or in registers if M small
-    float AtA[6][6] = {0};
-    float Atz[6]    = {0};
-
-    // Compute AtA_{i,j} = sum_k A[k,i] * A[k,j]
-    for(int k = 0; k < N; ++k) {
-        // pointer to the k-th row
-        const float* row = A + k*M;
-        for(int i = 0; i < M; ++i) {
-            float a_ki = row[i];
-            Atz[i] += a_ki * z[k];
-            for(int j = i; j < M; ++j) {
-                // only fill upper triangle
-                AtA[i][j] += a_ki * row[j];
-            }
-        }
-    }
-    // Mirror upper → lower triangle
-    for(int i = 0; i < M; ++i)
-        for(int j = i+1; j < M; ++j)
-            AtA[j][i] = AtA[i][j];
-
-    // 2) Cholesky factorization: AtA = Rᵀ R, where R is lower-triangular
-    // We’ll overwrite AtA with R
-    for(int i = 0; i < M; ++i) {
-        // diagonal
-        float sum = AtA[i][i];
-        for(int k = 0; k < i; ++k)
-            sum -= AtA[i][k] * AtA[i][k];
-        AtA[i][i] = sqrtf(sum);
-
-        // off-diagonals
-        for(int j = i+1; j < M; ++j) {
-            float s = AtA[j][i];
-            for(int k = 0; k < i; ++k)
-                s -= AtA[j][k] * AtA[i][k];
-            AtA[j][i] = s / AtA[i][i];
-        }
-    }
-
-    // 3) Forward solve  Rᵀ y = Atz
-    // Rᵀ is upper-triangular in our storage (since R is in lower triangle)
-    float y[6];
-    for(int i = 0; i < M; ++i) {
-        float s = Atz[i];
-        for(int k = 0; k < i; ++k)
-            s -= AtA[i][k] * y[k];
-        y[i] = s / AtA[i][i];
-    }
-
-    // 4) Backward solve R β = y
-    for(int i = M-1; i >= 0; --i) {
-        float s = y[i];
-        for(int k = i+1; k < M; ++k)
-            s -= AtA[k][i] * beta[k];
-        beta[i] = s / AtA[i][i];
-    }
-}
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_value, float min_prominence, float max_width)
+block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_value, float min_prominence, float min_sharpness)
 {
+	constexpr float P[150] = {
+	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
+	-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
+	-0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f,
+	-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
+	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
+
+	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+
+	0.04f,       0.02f,       0.0f,      -0.02f,     -0.04f,
+	0.02f,       0.01f,       0.0f,      -0.01f,     -0.02f,
+	0.0f,        0.0f,        0.0f,       0.0f,       0.0f,
+	-0.02f,      -0.01f,       0.0f,       0.01f,      0.02f,
+	-0.04f,      -0.02f,       0.0f,       0.02f,      0.04f,
+
+	-0.04f, -0.04f, -0.04f, -0.04f, -0.04f,
+	-0.02f, -0.02f, -0.02f, -0.02f, -0.02f,
+	0.0f,   0.0f,   0.0f,   0.0f,   0.0f,
+	0.02f,  0.02f,  0.02f,  0.02f,  0.02f,
+	0.04f,  0.04f,  0.04f,  0.04f,  0.04f,
+
+	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+
+	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f,
+	0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
+	0.04f,       0.125714f,   0.154286f,  0.125714f,   0.04f,
+	0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
+	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
+};
+
+	constexpr int2 patch_size = {5,5};
+	constexpr int2 half_patch_size = {(patch_size.x - 1) / 2, (patch_size.y - 1) / 2};
+	int peak_id = blockIdx.x;
+
+	int2 peak_pos = peak_positions[peak_id];
+	int peak_offset = peak_pos.y * line_step + peak_pos.x;
+
+	if( peak_value[peak_id] <= 0.0f )
+	{
+		return;
+	}
+
+	float values[25] = { 0.0f };
+
+	// Load the 5x5 patch around the peak position
+	int i = 0;
+	#pragma unroll
+	for(int y = -half_patch_size.y; y <= half_patch_size.y; y++)
+	{
+		#pragma unroll
+		for(int x = -half_patch_size.x; x <= half_patch_size.x; x++)
+		{
+			values[i++] = d_corr_map[peak_offset + y * line_step + x];
+		}
+	}
+
+	// Generate the polynomial fit (f is unused)
+	float coeff[5] = { 0.0f };
+	#pragma unroll
+	for(int i = 0; i < 5; i++)
+	{
+		float sum = 0.0f;
+		#pragma unroll
+		for(int j = 0; j < 25; j++)
+		{
+			sum += P[i * 25 + j] * values[j];
+		}
+		coeff[i] = sum;
+	}
+
+	float sharpness[2] = { 0.0f, 0.0f };
+
+	float root = sqrtf( powf(2 * coeff[0] + 2 * coeff[1], 2) - 4 * (4 * coeff[0] * coeff[2] - coeff[2] * coeff[2]) );
+
+	sharpness[0] = (2 * coeff[0] + 2 * coeff[1] + root) / 2;
+	sharpness[1] = (2 * coeff[0] + 2 * coeff[1] - root) / 2;
+
+	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
+	if(max_sharpness < min_sharpness)
+	{
+		peak_value[peak_id] = -1.0f; // Mark as invalid
+	}
+
+	if(peak_id == 0)
+		printf("Peak ID: %d, Position: (%d, %d), Value: %f, Sharpness: %f\n", peak_id, peak_pos.x, peak_pos.y, peak_value[peak_id], max_sharpness);
+
+	return;
 
 }

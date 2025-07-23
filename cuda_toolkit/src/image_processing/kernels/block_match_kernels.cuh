@@ -11,6 +11,8 @@ namespace block_match::kernels
 {
 
 	
+
+	
 	// Warp reduce to find the maximum value and its position
 	// Treating the int2 position as a single 64-bit integer for the intrinsics
 	__inline__ __device__ void
