@@ -205,3 +205,74 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 	}
 
 }
+
+__device__ void 
+normalCholeskySolve(const float* A, const float* z,
+                         int N, int M,
+                         float* beta)
+{
+    // 1) Form AtA (M×M) and Atz (M)
+    // Allocate on stack or in registers if M small
+    float AtA[6][6] = {0};
+    float Atz[6]    = {0};
+
+    // Compute AtA_{i,j} = sum_k A[k,i] * A[k,j]
+    for(int k = 0; k < N; ++k) {
+        // pointer to the k-th row
+        const float* row = A + k*M;
+        for(int i = 0; i < M; ++i) {
+            float a_ki = row[i];
+            Atz[i] += a_ki * z[k];
+            for(int j = i; j < M; ++j) {
+                // only fill upper triangle
+                AtA[i][j] += a_ki * row[j];
+            }
+        }
+    }
+    // Mirror upper → lower triangle
+    for(int i = 0; i < M; ++i)
+        for(int j = i+1; j < M; ++j)
+            AtA[j][i] = AtA[i][j];
+
+    // 2) Cholesky factorization: AtA = Rᵀ R, where R is lower-triangular
+    // We’ll overwrite AtA with R
+    for(int i = 0; i < M; ++i) {
+        // diagonal
+        float sum = AtA[i][i];
+        for(int k = 0; k < i; ++k)
+            sum -= AtA[i][k] * AtA[i][k];
+        AtA[i][i] = sqrtf(sum);
+
+        // off-diagonals
+        for(int j = i+1; j < M; ++j) {
+            float s = AtA[j][i];
+            for(int k = 0; k < i; ++k)
+                s -= AtA[j][k] * AtA[i][k];
+            AtA[j][i] = s / AtA[i][i];
+        }
+    }
+
+    // 3) Forward solve  Rᵀ y = Atz
+    // Rᵀ is upper-triangular in our storage (since R is in lower triangle)
+    float y[6];
+    for(int i = 0; i < M; ++i) {
+        float s = Atz[i];
+        for(int k = 0; k < i; ++k)
+            s -= AtA[i][k] * y[k];
+        y[i] = s / AtA[i][i];
+    }
+
+    // 4) Backward solve R β = y
+    for(int i = M-1; i >= 0; --i) {
+        float s = y[i];
+        for(int k = i+1; k < M; ++k)
+            s -= AtA[k][i] * beta[k];
+        beta[i] = s / AtA[i][i];
+    }
+}
+
+__global__ void
+block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_value, float min_prominence, float max_width)
+{
+
+}

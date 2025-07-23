@@ -145,8 +145,8 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 
 		if( t_bot_overflow > 0 )
 		{
-			// Shrink the ROI to avoid overflow
-			row_tpl_roi.height -= t_bot_overflow;
+			motion_map[i * motion_grid_dims.x] = {0, 0}; // No valid motion detected
+			continue;
 		}
 
 		if( s_bot_overflow > 0 )
@@ -178,7 +178,8 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			if ( t_right_overflow > 0 )
 			{
 				// Shrink the ROI to avoid overflow
-				current_tpl_roi.width -= t_right_overflow;
+				motion_map[i * motion_grid_dims.x + j] = {0, 0}; // No valid motion detected
+				continue;
 			}
 
 			if( s_right_overflow > 0 )

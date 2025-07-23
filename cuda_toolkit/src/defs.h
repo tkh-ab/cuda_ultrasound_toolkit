@@ -71,6 +71,8 @@ inline double hamming_coef(int n, int N)
 }
 
 
+#define LERP(y0, y1, x) ((y0) + (x) * ((y1) - (y0)))
+#define ILERP(y0, y1, y) ((y) - (y0)) / ((y1) - (y0)))
 
 inline std::string format_cplx(const cuComplex& value)
 {
