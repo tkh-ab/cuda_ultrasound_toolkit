@@ -83,12 +83,13 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 
 		int2 *current_map = motion_maps + i * motion_map_count;
 
-		result &= _compare_images( 	d_input_images[i],
-												d_input_images[reference_frame],
-												current_map,
-												image_dims,
-												params
-											);
+		// PitchedArray<float>* template_image = d_input_images.data() + reference_frame;
+		// PitchedArray<float>* source_image = d_input_images.data() + i;
+
+		PitchedArray<float>* template_image = d_input_images.data() + i;
+		PitchedArray<float>* source_image = d_input_images.data() + reference_frame;
+
+		result &= _compare_images( *template_image, *source_image, current_map, image_dims, params);
 
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed = end - start;
@@ -230,7 +231,6 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 
 			cudaFree(scratch_buffer);
 
-			motion_vector = SUB_V2(motion_vector, no_shift_index);
 			auto peak_end = std::chrono::high_resolution_clock::now();
 			peak_duration += (peak_end - peak_start);
 
