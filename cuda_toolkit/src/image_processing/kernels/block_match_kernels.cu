@@ -142,7 +142,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	block_dims = { 1, 1, 1 };
 	grid_dims = {total_patches, 1, 1};
 
-	float min_prominence = 0.05f;
+	float min_prominence = 0.1f;
 	float min_sharpness = params.min_patch_variance;
 
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
@@ -213,7 +213,7 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 __global__ void
 block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, float min_prominence, float min_sharpness)
 {
-	constexpr float P[150] = {
+	constexpr float P5[150] = {
 	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
 	-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
 	-0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f,
@@ -251,6 +251,56 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
 };
 
+	constexpr float P7[294] = {
+    // Row 0
+     0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0f,        0.0f,
+     0.0f,        0.0f, 0.0f,        0.0f, 0.0f,       -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,
+    -0.0051020f, -0.0051020f, -0.0051020f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f,
+    -0.0068027f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,  0.0f,
+     0.0f, 0.0f,        0.0f, 0.0f,        0.0f, 0.0f,        0.0085034f,  0.0085034f,  0.0085034f,
+     0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,
+
+    // Row 1
+     0.0085034f,  0.0f,       -0.0051020f, -0.0068027f, -0.0051020f,  0.0f,        0.0085034f,  0.0085034f,  0.0f,
+    -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f, -0.0051020f, -0.0068027f,
+    -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f,       -0.0051020f, -0.0068027f, -0.0051020f,  0.0f,
+     0.0085034f,  0.0085034f,  0.0f, -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,
+     0.0f, -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f,       -0.0051020f,
+    -0.0068027f, -0.0051020f,  0.0f,        0.0085034f,
+
+    // Row 2
+     0.0114796f,  0.0076531f,  0.0038265f,  0.0f,       -0.0038265f, -0.0076531f, -0.0114796f,  0.0076531f,  0.0051020f,
+     0.0025510f,  0.0f,       -0.0025510f, -0.0051020f, -0.0076531f,  0.0038265f,  0.0025510f,  0.0012755f,  0.0f,
+    -0.0012755f, -0.0025510f, -0.0038265f,  0.0f,        0.0f,        0.0f,        0.0f,        0.0f,        0.0f,
+     0.0f,       -0.0038265f, -0.0025510f, -0.0012755f,  0.0f,        0.0012755f,  0.0025510f,  0.0038265f, -0.0076531f,
+    -0.0051020f, -0.0025510f,  0.0f,        0.0025510f,  0.0051020f,  0.0076531f, -0.0114796f, -0.0076531f, -0.0038265f,
+     0.0f,        0.0038265f,  0.0076531f,  0.0114796f,
+
+    // Row 3
+    -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0102041f, -0.0102041f,
+    -0.0102041f, -0.0102041f, -0.0102041f, -0.0102041f, -0.0102041f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,
+    -0.0051020f, -0.0051020f, -0.0051020f,  0.0f,        0.0f,        0.0f,        0.0f,        0.0f,        0.0f,
+     0.0f,        0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0102041f,
+     0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0153061f,  0.0153061f,  0.0153061f,
+     0.0153061f,  0.0153061f,  0.0153061f,  0.0153061f,
+
+    // Row 4
+    -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f,
+    -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,
+     0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,
+     0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f,
+    -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,
+     0.0f,        0.0051020f,  0.0102041f,  0.0153061f,
+
+    // Row 5
+    -0.0476190f, -0.0136054f,  0.0068027f,  0.0136054f,  0.0068027f, -0.0136054f, -0.0476190f, -0.0136054f,  0.0204082f,
+     0.0408163f,  0.0476190f,  0.0408163f,  0.0204082f, -0.0136054f,  0.0068027f,  0.0408163f,  0.0612245f,  0.0680272f,
+     0.0612245f,  0.0408163f,  0.0068027f,  0.0136054f,  0.0476190f,  0.0680272f,  0.0748299f,  0.0680272f,  0.0476190f,
+     0.0136054f,  0.0068027f,  0.0408163f,  0.0612245f,  0.0680272f,  0.0612245f,  0.0408163f,  0.0068027f, -0.0136054f,
+     0.0204082f,  0.0408163f,  0.0476190f,  0.0408163f,  0.0204082f, -0.0136054f, -0.0476190f, -0.0136054f,  0.0068027f,
+     0.0136054f,  0.0068027f, -0.0136054f, -0.0476190f
+};
+
 	constexpr int2 patch_margins = { 2, 2 };
 	int peak_id = blockIdx.x;
 
@@ -266,8 +316,9 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	float values[25] = { 0.0f };
 	float border_rms = 0.0f;
 
-	// Load the 5x5 patch around the peak position
+	// Load the 7x7 patch around the peak position
 	int i = 0;
+	int n = 0;
 	#pragma unroll
 	for(int y = -patch_margins.y; y <= patch_margins.y; y++)
 	{
@@ -279,6 +330,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 			if( abs(x) == patch_margins.x || abs(y) == patch_margins.y)
 			{
 				border_rms += values[i] * values[i]; // Accumulate the border values for RMS calculation
+				n++;
 			}
 			i++;
 		}
@@ -286,7 +338,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 
 	// Average value at the edge of this patch
 	// Using for a quick and dirty prominance metric
-	border_rms = sqrtf(border_rms/16);
+	border_rms = sqrtf(border_rms/n);
 	float prominance = (peak_value - border_rms) / peak_value;
 
 	
@@ -300,7 +352,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 		#pragma unroll
 		for(int j = 0; j < 25; j++)
 		{
-			sum += P[i * 25 + j] * values[j];
+			sum += P5[i * 25 + j] * values[j];
 		}
 		coeff[i] = sum;
 	}
@@ -315,11 +367,13 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
-	if (prominance < min_prominence)
-	{
-		peak_values[peak_id] = -1.0f; // Mark as invalid
-		return;
-	}
+	// if (prominance < min_prominence)
+	// {
+	// 	peak_values[peak_id] = -1.0f; // Mark as invalid
+	// 	return;
+	// }
+
+	float width = sqrt( peak_value / (max_sharpness * 0.5f) );
 
 	if(max_sharpness < min_sharpness)
 	{
@@ -328,7 +382,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	}
 
 	// if(peak_id == 0)
-	// 	printf("Peak ID: %d, Position: (%d, %d), Value: %f, Sharpness: %f, Prominence: %f\n", peak_id, peak_pos.x, peak_pos.y, peak_value, max_sharpness, prominance);
+	// 	printf("Peak ID: %d, Position: (%d, %d), Value: %f, Width: %f\n", peak_id, peak_pos.x, peak_pos.y, peak_value, width);
 	
 
 	return;

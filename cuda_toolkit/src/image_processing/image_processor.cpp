@@ -76,7 +76,7 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 	bool result = false;
 	for( uint i = 0; i < d_input_images.size(); ++i)
 	{
-		std::cout << "Processing frame " << i << std::endl;
+		std::cout << "Processing frame " << i + 1<< std::endl;
 
 		auto start = std::chrono::high_resolution_clock::now();
 		if( i == reference_frame ) continue;

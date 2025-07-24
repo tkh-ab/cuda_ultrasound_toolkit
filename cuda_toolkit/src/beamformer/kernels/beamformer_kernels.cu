@@ -261,7 +261,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				    value = SCALE_F2(value, I_SQRT_128);
 				}
 
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(rx_vec.x, vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
@@ -284,6 +284,8 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 	float coherency_factor = coherent_sum / incoherent_sum;
 
 	coherency_factor = powf(coherency_factor, 1/4.f);
+
+	//coherency_factor = powf(coherency_factor, 1/5.f);
 
 	total = SCALE_F2(total, coherency_factor);
 
