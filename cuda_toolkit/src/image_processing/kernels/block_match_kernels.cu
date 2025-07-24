@@ -114,15 +114,6 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	dim3 block_dims = { Peak_Detect_Block_Dims.x, Peak_Detect_Block_Dims.y, 1 };
 	dim3 grid_dims = { patch_cols, patch_rows, 1 };
 
-	// Print all parameter of the call
-	//std::cout << "Grid Dims: " << grid_dims.x << " x " << grid_dims.y << ", Block Dims: " << block_dims.x << " x " << block_dims.y << std::endl;
-	//std::cout << "Total Patches: " << total_patches << std::endl;
-	//std::cout << "Threshold: " << threshold << ", No Shift Value: " << no_shift_value << std::endl;
-	//std::cout << "Row Pitch: " << row_pitch << ", Line Step: " << line_step << std::endl;
-
-	//// And pointer address sanity check
-	//std::cout << "d_corr_map: " << d_corr_map << ", d_peak_values: " << d_peak_values << ", d_peak_positions: " << d_peak_positions << std::endl;
-
 	kernels::find_local_peaks_kernel<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, threshold, d_peak_values, d_peak_positions);
 
 	volatile cudaError_t err = cudaDeviceSynchronize();
@@ -147,7 +138,6 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
 	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
-	thrust::sort_by_key(d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
 
 	kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, min_prominence, min_sharpness);
 

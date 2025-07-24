@@ -110,98 +110,74 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 	std::chrono::duration<double> corr_duration = std::chrono::duration<double>::zero();
 	std::chrono::duration<double> peak_duration = std::chrono::duration<double>::zero();
 	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
-	NppiSize tpl_roi = { (int)params.patch_size, (int)params.patch_size };
-	NppiSize src_roi = { tpl_roi.width + (int)search_margins.x * 2 + 1, 
-							tpl_roi.height + (int)search_margins.y * 2 };
+	int patch_size = params.patch_size;
 
 	int template_line_step = template_image.pitch;
 	int source_line_step = source_image.pitch;
 
-	int template_row_offset = template_line_step / sizeof(float);
-	int source_row_offset = source_line_step / sizeof(float);
+	int template_pitch = template_line_step / sizeof(float);
+	int source_pitch = source_line_step / sizeof(float);
 
 	uint2 motion_grid_dims = { params.motion_grid_dims[0], params.motion_grid_dims[1] };
+	int grid_spacing = params.motion_grid_spacing;
 
-	int y_margin = params.search_margins[1];
-	int x_margin = params.search_margins[0];
+	uint2 template_center = { patch_size / 2, patch_size / 2 };
+
 	int count = 0;
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
-		uint tpl_row_id = i * params.motion_grid_spacing;
-		
+		int tpl_center_y = i * grid_spacing;
 
-		int src_row_id = tpl_row_id - y_margin;
+		int tpl_top_y = tpl_center_y - template_center.y;
+		int tpl_bottom_y = tpl_top_y + patch_size - 1;
 
-		int s_bot_overflow = src_row_id + src_roi.height - image_dims.y;
-		int t_bot_overflow = s_bot_overflow - search_margins.y;
+		int src_top_y = tpl_top_y - search_margins.y;
+		int src_bottom_y = tpl_bottom_y + search_margins.y;
 
-		NppiSize row_src_roi = src_roi;
-		NppiSize row_tpl_roi = tpl_roi;
-		if( src_row_id < 0 )
-		{
-			// Shrink the ROI and set the new corner
-			row_src_roi.height += src_row_id;
-			src_row_id = 0; // marking the new corner
-		}
+		tpl_top_y = max(tpl_top_y, 0);
+		tpl_bottom_y = min(tpl_bottom_y, image_dims.y - 1);
+		src_top_y = max(src_top_y, 0);
+		src_bottom_y = min(src_bottom_y, image_dims.y - 1);
 
-		if( t_bot_overflow > 0 )
-		{
-			motion_map[i * motion_grid_dims.x] = {0, 0}; // No valid motion detected
-			continue;
-		}
-
-		if( s_bot_overflow > 0 )
-		{
-			// Shrink the ROI to avoid overflow
-			row_src_roi.height -= s_bot_overflow;
-		}
-
-		float* template_row_start = template_image.data + tpl_row_id * template_row_offset;
-		float* src_row_start = source_image.data + src_row_id * source_row_offset;
+		float* template_row_start = template_image.get_row(tpl_top_y);
+		float* src_row_start = source_image.get_row(src_top_y);
 
 		for( uint j = 0; j < motion_grid_dims.x; j++ ) // Columns
 		{
-			uint tpl_col_id = j * params.motion_grid_spacing;
-			int src_col_id = tpl_col_id - x_margin;
 
-			int s_right_overflow = src_col_id + src_roi.width - image_dims.x;
-			int t_right_overflow = s_right_overflow - search_margins.x;
+			int tpl_center_x = j * grid_spacing;
+			int tpl_left_x = tpl_center_x - template_center.x;
+			int tpl_right_x = tpl_left_x + patch_size - 1;
 
-			NppiSize current_src_roi = row_src_roi;
-			NppiSize current_tpl_roi = row_tpl_roi;
-			if( src_col_id < 0 )
-			{
-				// Shrink the ROI and set the new corner
-				current_src_roi.width += src_col_id;
-				src_col_id = 0; // marking the new corner
-			}
+			// +1 Ensures the valid correlation output has even width for best NCC performance.
+			// There's still a performance hit on the edges but its an improvement.
+			int src_left_x = tpl_left_x - search_margins.x; 
+			int src_right_x = tpl_right_x + search_margins.x + 1;
 
-			if ( t_right_overflow > 0 )
-			{
-				// Shrink the ROI to avoid overflow
-				motion_map[i * motion_grid_dims.x + j] = {0, 0}; // No valid motion detected
-				continue;
-			}
+			tpl_left_x = max(tpl_left_x, 0);
+			tpl_right_x = min(tpl_right_x, image_dims.x - 1);
+			src_left_x = max(src_left_x, 0);
+			src_right_x = min(src_right_x, image_dims.x - 1);
 
-			if( s_right_overflow > 0 )
-			{
-				// Shrink the ROI to avoid overflow
-				current_src_roi.width -= s_right_overflow;
-			}
-			
-			float* template_corner = template_row_start + tpl_col_id;
-			float* source_corner = src_row_start + src_col_id;
+			NppiSize tpl_roi = { tpl_right_x - tpl_left_x + 1, 
+								 tpl_bottom_y - tpl_top_y + 1 };
+			NppiSize src_roi = { src_right_x - src_left_x + 1, 
+								 src_bottom_y - src_top_y + 1 };
 
-			NppiSize valid_corr_dims = { .width = current_src_roi.width - current_tpl_roi.width + 1, 
-								.height = current_src_roi.height - current_tpl_roi.height + 1 };
+			float* template_corner = template_row_start + tpl_left_x;
+			float* source_corner = src_row_start + src_left_x;
+
+			NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
+										.height = src_roi.height - tpl_roi.height + 1 };
+
 			int corr_line_step = valid_corr_dims.width * sizeof(float);
 
 			
 			// Perform the NCC comparison
 
 			auto corr_start = std::chrono::high_resolution_clock::now();
-			volatile NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, current_src_roi, 
-													template_corner, template_line_step, current_tpl_roi, 
+			volatile NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, src_roi, 
+													template_corner, template_line_step, tpl_roi, 
 													_d_corr_map, corr_line_step, _d_scratch_buffer, _stream_context);
 			cudaDeviceSynchronize();
 			if (status != NPP_SUCCESS)
@@ -210,19 +186,16 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 				return false;
 			}
 
-
 			auto corr_end = std::chrono::high_resolution_clock::now();
 			corr_duration += (corr_end - corr_start);
 
-			int2 no_shift_index = {(int)tpl_col_id - src_col_id, (int)tpl_row_id - src_row_id};
+			// Which value in the correlation map represents no motion.
+			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
 			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
-		
-			//show_corr_map(_d_corr_map, valid_corr_dims, corr_line_step);
+	
 
 			auto peak_start = std::chrono::high_resolution_clock::now();
 			//int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
-
-			//std::cout << "I: " << i << ", J: " << j << std::endl;
 
 			u8* scratch_buffer;
 			cudaMalloc((void**)&scratch_buffer, _scratch_buffer_size);
