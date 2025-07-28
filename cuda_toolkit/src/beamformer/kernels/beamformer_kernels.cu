@@ -253,17 +253,14 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 				float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
 				float scan_index = total_distance * samples_per_meter + delay_samples;
-
-
 				scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
-				if (t == 0)
-				{
-				    value = SCALE_F2(value, I_SQRT_128);
-				}
-
+				// if (t == 0)
+				// {
+				//     value = SCALE_F2(value, I_SQRT_128);
+				// }
 				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 

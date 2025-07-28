@@ -6,7 +6,7 @@
 
 namespace block_match
 {
-	static constexpr int2 Peak_Detect_Block_Dims = { 8, 4 };
+	static constexpr uint2 Peak_Detect_Block_Dims = { 8, 4 };
 
 	__host__ inline int2
 	find_peak(const float* d_corr_map, NppiSize dims)

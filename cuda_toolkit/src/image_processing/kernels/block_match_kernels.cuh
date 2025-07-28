@@ -7,39 +7,50 @@
 #include "block_match.h"
 
 
-namespace block_match::kernels
+namespace block_match
 {
-
-	
-
-	
-	// Warp reduce to find the maximum value and its position
-	// Treating the int2 position as a single 64-bit integer for the intrinsics
-	__inline__ __device__ void
-	warp_reduce_max(float* val, i64* pos)
+	__host__ void
+	print_peak_positions(const int2* peak_positions, const float* peaks, int total_patches)
 	{
-		static constexpr unsigned mask = 0xffffffffu;
-		static constexpr int warp_size = 32;
-		#pragma unroll
-		for (int offset = warp_size / 2; offset > 0; offset /= 2)
+		std::cout << std::endl << "Peak Positions and Values:" << std::endl;
+		for (int i = 0; i < total_patches; i++)
 		{
-			float v2 = __shfl_down_sync(mask, *val, offset);
-			i64  p2 = __shfl_down_sync(mask, *pos, offset);
-			if (v2 > *val)
-			{
-				*val = v2;
-				*pos = p2;
-			}
+			int2 pos = peak_positions[i];
+			float val = peaks[i];
+			printf("Peak %d: Position (%d, %d), Value: %f\n", i, pos.x, pos.y, val);
 		}
+		std::cout << std::endl;
 	}
 
-	// Each warp takes a 8x4 block and returns the peak position and value 
-	__global__ void
-	find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float threshold, float* peak_values, int2* peak_positions);
+	namespace kernels {
+		// Warp reduce to find the maximum value and its position
+		// Treating the int2 position as a single 64-bit integer for the intrinsics
+		__inline__ __device__ void
+			warp_reduce_max(float* val, i64 * pos)
+		{
+			static constexpr unsigned mask = 0xffffffffu;
+			static constexpr int warp_size = 32;
+			#pragma unroll
+			for (int offset = warp_size / 2; offset > 0; offset /= 2)
+			{
+				float v2 = __shfl_down_sync(mask, *val, offset);
+				i64  p2 = __shfl_down_sync(mask, *pos, offset);
+				if (v2 > *val)
+				{
+					*val = v2;
+					*pos = p2;
+				}
+			}
+		}
 
-	// Test the prominance and sharpness of the peaks, set any that fail to zero.
-	__global__ void
-	test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_value, float min_prominence, float max_width);
+		// Each warp takes a 8x4 block and returns the peak position and value 
+		__global__ void
+			find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float threshold, float* peak_values, int2 * peak_positions);
+
+		// Test the prominance and sharpness of the peaks, set any that fail to zero.
+		__global__ void
+			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, float min_prominence, float max_width);
 
 
+	}
 }

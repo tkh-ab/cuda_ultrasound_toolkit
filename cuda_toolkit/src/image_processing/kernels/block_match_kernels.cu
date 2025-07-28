@@ -3,19 +3,6 @@
 
 #include "block_match_kernels.cuh"
 
-static __host__ void
-print_peak_positions(const int2* peak_positions, const float* peaks, int total_patches)
-{
-	std::cout << std::endl << "Peak Positions and Values:" << std::endl;
-	for(int i = 0; i < total_patches; i++)
-	{
-		int2 pos = peak_positions[i];
-		float val = peaks[i];
-		printf("Peak %d: Position (%d, %d), Value: %f\n", i, pos.x, pos.y, val);
-	}
-	std::cout << std::endl;
-}
-
 int2
 block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos, int line_step)
 {
@@ -43,14 +30,6 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 		return { INT_MIN, INT_MIN };
 	}
 
-	// status = nppiMinIndx_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->min_peak_value, &d_stats->min_peak_pos.x, &d_stats->min_peak_pos.y, stream_context);
-
-	// if (status != NPP_SUCCESS)
-	// {
-	// 	std::cerr << "NPP error '"<< status <<"' during peak detection." << std::endl;
-	// 	return { INT_MIN, INT_MIN };
-	// }
-
 	status = nppiMean_StdDev_32f_C1R_Ctx(d_corr_map, line_step, dims, scratch_stack, &d_stats->corr_mean, &d_stats->corr_std, stream_context);
 
 	if (status != NPP_SUCCESS)
@@ -65,26 +44,13 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 	int2 true_peak_pos = c_stats.peak_pos;
 	float true_peak_value = c_stats.peak_value;
 
-	// if(abs(c_stats.min_peak_value) > abs(c_stats.peak_value))
-	// {
-	// 	true_peak_value = abs(c_stats.min_peak_value);
-	// 	true_peak_pos = c_stats.min_peak_pos;
-	// }
-
 	double corr_variance = c_stats.corr_std * c_stats.corr_std;
 
 	// If the peak isn't much higher than the no-shift value, we reject motion
-	if (true_peak_value < (no_shift_value * params.correlation_threshold))
+	if (true_peak_value < (no_shift_value * params.correlation_threshold) || corr_variance < params.min_patch_variance)
 	{
 		true_peak_pos = { 0, 0 };
-		return true_peak_pos;
 	}
-
-	// If the correlation map is too uniform we can't trust the peak
-	// if( corr_variance < params.min_patch_variance )
-	// {
-	// 	return { 0, 0 };
-	// }
 	return true_peak_pos;
 }
 
@@ -173,7 +139,8 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 __global__ void
 block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float threshold, float* peak_values, int2* peak_positions)
 {
-	int2 pixel_pos = { threadIdx.x + blockIdx.x * Peak_Detect_Block_Dims.x, threadIdx.y + blockIdx.y * Peak_Detect_Block_Dims.y };
+	int2 pixel_pos = { static_cast<int>(threadIdx.x + blockIdx.x * Peak_Detect_Block_Dims.x),
+					   static_cast<int>(threadIdx.y + blockIdx.y * Peak_Detect_Block_Dims.y) };
 
 	if( pixel_pos.x >= dims.width || pixel_pos.y >= dims.height )
 	{
@@ -184,8 +151,6 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 
 	// Thread 0 in the warp will have the maximum value
 	warp_reduce_max(&value, reinterpret_cast<i64*>(&pixel_pos));
-
-	i64* pos = reinterpret_cast<i64*>(&pixel_pos);
 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
 	{
@@ -241,57 +206,8 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
 };
 
-	constexpr float P7[294] = {
-    // Row 0
-     0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,  0.0f,        0.0f,
-     0.0f,        0.0f, 0.0f,        0.0f, 0.0f,       -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,
-    -0.0051020f, -0.0051020f, -0.0051020f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f, -0.0068027f,
-    -0.0068027f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,  0.0f,
-     0.0f, 0.0f,        0.0f, 0.0f,        0.0f, 0.0f,        0.0085034f,  0.0085034f,  0.0085034f,
-     0.0085034f,  0.0085034f,  0.0085034f,  0.0085034f,
-
-    // Row 1
-     0.0085034f,  0.0f,       -0.0051020f, -0.0068027f, -0.0051020f,  0.0f,        0.0085034f,  0.0085034f,  0.0f,
-    -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f, -0.0051020f, -0.0068027f,
-    -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f,       -0.0051020f, -0.0068027f, -0.0051020f,  0.0f,
-     0.0085034f,  0.0085034f,  0.0f, -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,
-     0.0f, -0.0051020f, -0.0068027f, -0.0051020f,  0.0f, 0.0085034f,  0.0085034f,  0.0f,       -0.0051020f,
-    -0.0068027f, -0.0051020f,  0.0f,        0.0085034f,
-
-    // Row 2
-     0.0114796f,  0.0076531f,  0.0038265f,  0.0f,       -0.0038265f, -0.0076531f, -0.0114796f,  0.0076531f,  0.0051020f,
-     0.0025510f,  0.0f,       -0.0025510f, -0.0051020f, -0.0076531f,  0.0038265f,  0.0025510f,  0.0012755f,  0.0f,
-    -0.0012755f, -0.0025510f, -0.0038265f,  0.0f,        0.0f,        0.0f,        0.0f,        0.0f,        0.0f,
-     0.0f,       -0.0038265f, -0.0025510f, -0.0012755f,  0.0f,        0.0012755f,  0.0025510f,  0.0038265f, -0.0076531f,
-    -0.0051020f, -0.0025510f,  0.0f,        0.0025510f,  0.0051020f,  0.0076531f, -0.0114796f, -0.0076531f, -0.0038265f,
-     0.0f,        0.0038265f,  0.0076531f,  0.0114796f,
-
-    // Row 3
-    -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0153061f, -0.0102041f, -0.0102041f,
-    -0.0102041f, -0.0102041f, -0.0102041f, -0.0102041f, -0.0102041f, -0.0051020f, -0.0051020f, -0.0051020f, -0.0051020f,
-    -0.0051020f, -0.0051020f, -0.0051020f,  0.0f,        0.0f,        0.0f,        0.0f,        0.0f,        0.0f,
-     0.0f,        0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0051020f,  0.0102041f,
-     0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0102041f,  0.0153061f,  0.0153061f,  0.0153061f,
-     0.0153061f,  0.0153061f,  0.0153061f,  0.0153061f,
-
-    // Row 4
-    -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f,
-    -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,
-     0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,
-     0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f,
-    -0.0102041f, -0.0051020f,  0.0f,        0.0051020f,  0.0102041f,  0.0153061f, -0.0153061f, -0.0102041f, -0.0051020f,
-     0.0f,        0.0051020f,  0.0102041f,  0.0153061f,
-
-    // Row 5
-    -0.0476190f, -0.0136054f,  0.0068027f,  0.0136054f,  0.0068027f, -0.0136054f, -0.0476190f, -0.0136054f,  0.0204082f,
-     0.0408163f,  0.0476190f,  0.0408163f,  0.0204082f, -0.0136054f,  0.0068027f,  0.0408163f,  0.0612245f,  0.0680272f,
-     0.0612245f,  0.0408163f,  0.0068027f,  0.0136054f,  0.0476190f,  0.0680272f,  0.0748299f,  0.0680272f,  0.0476190f,
-     0.0136054f,  0.0068027f,  0.0408163f,  0.0612245f,  0.0680272f,  0.0612245f,  0.0408163f,  0.0068027f, -0.0136054f,
-     0.0204082f,  0.0408163f,  0.0476190f,  0.0408163f,  0.0204082f, -0.0136054f, -0.0476190f, -0.0136054f,  0.0068027f,
-     0.0136054f,  0.0068027f, -0.0136054f, -0.0476190f
-};
-
 	constexpr int2 patch_margins = { 2, 2 };
+	constexpr int Total_Samples = 25; // 5x5 polynomial fit
 	int peak_id = blockIdx.x;
 
 	int2 peak_pos = peak_positions[peak_id];
@@ -303,7 +219,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 		return;
 	}
 
-	float values[25] = { 0.0f };
+	float values[Total_Samples] = { 0.0f };
 	float border_rms = 0.0f;
 
 	// Load the 7x7 patch around the peak position
@@ -340,9 +256,9 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	{
 		float sum = 0.0f;
 		#pragma unroll
-		for(int j = 0; j < 25; j++)
+		for(int j = 0; j < Total_Samples; j++)
 		{
-			sum += P5[i * 25 + j] * values[j];
+			sum += P5[i * Total_Samples + j] * values[j];
 		}
 		coeff[i] = sum;
 	}

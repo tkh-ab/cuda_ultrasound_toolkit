@@ -198,12 +198,12 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 		*params);
 
 	_transfer_server->write_output_data(std::span<const u8>(output_data, motion_map_size));
-	if (!_transfer_server->respond_success(motion_map_size))
+	if (!_transfer_server->respond_success((u32)motion_map_size))
 	{
 		std::cerr << "Error: Failed to respond with success." << std::endl;
 		return false;
 	}
 
-	delete[] output_data;
+	std::free(output_data);
 	return true;
 }

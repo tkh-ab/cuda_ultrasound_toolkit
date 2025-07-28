@@ -110,20 +110,16 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 	std::chrono::duration<double> corr_duration = std::chrono::duration<double>::zero();
 	std::chrono::duration<double> peak_duration = std::chrono::duration<double>::zero();
 	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
-	int patch_size = params.patch_size;
+	uint patch_size = params.patch_size;
 
-	int template_line_step = template_image.pitch;
-	int source_line_step = source_image.pitch;
-
-	int template_pitch = template_line_step / sizeof(float);
-	int source_pitch = source_line_step / sizeof(float);
+	int template_line_step = (int)template_image.pitch;
+	int source_line_step = (int)source_image.pitch;
 
 	uint2 motion_grid_dims = { params.motion_grid_dims[0], params.motion_grid_dims[1] };
 	int grid_spacing = params.motion_grid_spacing;
 
 	uint2 template_center = { patch_size / 2, patch_size / 2 };
 
-	int count = 0;
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
 		int tpl_center_y = i * grid_spacing;
@@ -135,9 +131,9 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 		int src_bottom_y = tpl_bottom_y + search_margins.y;
 
 		tpl_top_y = max(tpl_top_y, 0);
-		tpl_bottom_y = min(tpl_bottom_y, image_dims.y - 1);
+		tpl_bottom_y = min(tpl_bottom_y, (int)image_dims.y - 1);
 		src_top_y = max(src_top_y, 0);
-		src_bottom_y = min(src_bottom_y, image_dims.y - 1);
+		src_bottom_y = min(src_bottom_y, (int)image_dims.y - 1);
 
 		float* template_row_start = template_image.get_row(tpl_top_y);
 		float* src_row_start = source_image.get_row(src_top_y);
@@ -155,9 +151,9 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			int src_right_x = tpl_right_x + search_margins.x + 1;
 
 			tpl_left_x = max(tpl_left_x, 0);
-			tpl_right_x = min(tpl_right_x, image_dims.x - 1);
+			tpl_right_x = min(tpl_right_x, (int)image_dims.x - 1);
 			src_left_x = max(src_left_x, 0);
-			src_right_x = min(src_right_x, image_dims.x - 1);
+			src_right_x = min(src_right_x, (int)image_dims.x - 1);
 
 			NppiSize tpl_roi = { tpl_right_x - tpl_left_x + 1, 
 								 tpl_bottom_y - tpl_top_y + 1 };
@@ -191,18 +187,10 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 
 			// Which value in the correlation map represents no motion.
 			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
-			uint no_shift_offset = no_shift_index.y * valid_corr_dims.width + no_shift_index.x;
 	
-
 			auto peak_start = std::chrono::high_resolution_clock::now();
-			//int2 motion_vector = block_match::select_peak(_d_corr_map, valid_corr_dims, params, _d_scratch_buffer, _stream_context, no_shift_index, corr_line_step);
-
-			u8* scratch_buffer;
-			cudaMalloc((void**)&scratch_buffer, _scratch_buffer_size);
-			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, scratch_buffer);
+			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, _d_scratch_buffer);
 			cudaDeviceSynchronize();
-
-			cudaFree(scratch_buffer);
 
 			auto peak_end = std::chrono::high_resolution_clock::now();
 			peak_duration += (peak_end - peak_start);

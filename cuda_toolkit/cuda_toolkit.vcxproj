@@ -135,7 +135,8 @@
       <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <ExternalTemplatesDiagnostics>true</ExternalTemplatesDiagnostics>
-      <DisableSpecificWarnings>4464;4324</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4464;4324;</DisableSpecificWarnings>
+      <MultiProcessorCompilation>Yes</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -158,11 +159,13 @@ IF %ERRORLEVEL% LEQ 1 (
 )</Command>
     </PostBuildEvent>
     <CudaCompile>
-      <AdditionalOptions>-std=c++20 -Wno-deprecated-gpu-targets %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++20 -Wno-deprecated-gpu-targets -diag-suppress 177 %(AdditionalOptions)</AdditionalOptions>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <GenerateLineInfo>false</GenerateLineInfo>
       <FastMath>true</FastMath>
       <Optimization>Od</Optimization>
+      <SplitCompile>Default</SplitCompile>
+      <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -181,7 +184,8 @@ IF %ERRORLEVEL% LEQ 1 (
       <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <ExternalTemplatesDiagnostics>true</ExternalTemplatesDiagnostics>
-      <DisableSpecificWarnings>4464;4324</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4464;4324;</DisableSpecificWarnings>
+      <MultiProcessorCompilation>Yes</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -201,13 +205,15 @@ IF %ERRORLEVEL% LEQ 1 (
 )</Command>
     </PostBuildEvent>
     <CudaCompile>
-      <AdditionalOptions>-std=c++20 -Wno-deprecated-gpu-targets %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++20 -Wno-deprecated-gpu-targets -diag-suppress 177 %(AdditionalOptions)</AdditionalOptions>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <GPUDebugInfo>false</GPUDebugInfo>
       <GenerateLineInfo>true</GenerateLineInfo>
       <FastMath>true</FastMath>
       <HostDebugInfo>true</HostDebugInfo>
       <Optimization>Od</Optimization>
+      <SplitCompile>MaxThreads</SplitCompile>
+      <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
     </CudaCompile>
     <CudaLink>
       <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
