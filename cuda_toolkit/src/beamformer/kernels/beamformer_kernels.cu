@@ -237,6 +237,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 	float incoherent_sum = 0.0f;
 
 	float starting_x = rx_vec.x;
+
 	
 	uint sample_count = Beamformer_Constants.sample_count;
 	uint channel_count = Beamformer_Constants.channel_count;
@@ -252,6 +253,8 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 				float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
 				float scan_index = total_distance * samples_per_meter + delay_samples;
+
+
 				scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
@@ -261,7 +264,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				    value = SCALE_F2(value, I_SQRT_128);
 				}
 
-				float apo = utils::f_num_apodization(rx_vec.x, vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
@@ -282,10 +285,8 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
     float coherent_sum = NORM_SQUARE_F2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
-
 	coherency_factor = powf(coherency_factor, 1/4.f);
-
-	//coherency_factor = powf(coherency_factor, 1/5.f);
+	coherency_factor = utils::clear_nan(coherency_factor);
 
 	total = SCALE_F2(total, coherency_factor);
 

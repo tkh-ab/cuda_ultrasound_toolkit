@@ -83,11 +83,11 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 
 		int2 *current_map = motion_maps + i * motion_map_count;
 
-		// PitchedArray<float>* template_image = d_input_images.data() + reference_frame;
-		// PitchedArray<float>* source_image = d_input_images.data() + i;
+		PitchedArray<float>* template_image = d_input_images.data() + reference_frame;
+		PitchedArray<float>* source_image = d_input_images.data() + i;
 
-		PitchedArray<float>* template_image = d_input_images.data() + i;
-		PitchedArray<float>* source_image = d_input_images.data() + reference_frame;
+		// PitchedArray<float>* template_image = d_input_images.data() + i;
+		// PitchedArray<float>* source_image = d_input_images.data() + reference_frame;
 
 		result &= _compare_images( *template_image, *source_image, current_map, image_dims, params);
 

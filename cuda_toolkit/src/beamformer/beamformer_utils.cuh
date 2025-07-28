@@ -151,4 +151,12 @@ namespace bf_kernels::utils
         return focal_depth + NORM_F3(rx_vec) + NORM_F3(tx_vec) * sign;
     }
 
+    // Branchlessly replaces NaNs with 0;
+    __device__ __forceinline__ inline float
+	clear_nan(float value)
+	{
+		uint mask = isnan(value) -1;
+        return __int_as_float((__float_as_int(value) & mask));
+	}
+
 }
