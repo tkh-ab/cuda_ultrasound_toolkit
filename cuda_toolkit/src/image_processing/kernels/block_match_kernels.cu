@@ -96,8 +96,8 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 		return no_shift_pos;
 	}
 
-	block_dims = { 1, 1, 1 };
-	grid_dims = {total_patches, 1, 1};
+	block_dims = { WARP_SIZE, 1, 1 };
+	grid_dims = { (uint)ceilf((float)total_patches / (float)WARP_SIZE), 1, 1 };
 
 	float min_prominence = 0.1f;
 	float min_sharpness = params.min_patch_variance;
@@ -105,7 +105,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
 	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
 
-	kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, min_prominence, min_sharpness);
+	kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, total_patches, min_sharpness);
 
 	cudaDeviceSynchronize();
 	if (cudaGetLastError() != cudaSuccess)
@@ -114,16 +114,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 		return motion_vector;
 	}
 
-	
 	thrust::sort_by_key(d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
-	 //float* cpu_peak_values = new float[total_patches];
-	 //cudaMemcpy(cpu_peak_values, d_peak_values, total_patches * sizeof(float), cudaMemcpyDeviceToHost);
-	 //int2* cpu_peak_positions = new int2[total_patches];
-	 //cudaMemcpy(cpu_peak_positions, d_peak_positions, total_patches * sizeof(int2), cudaMemcpyDeviceToHost);
-
-	 ////print_peak_positions(cpu_peak_positions, cpu_peak_values, total_patches);
-	 //delete[] cpu_peak_values;
-	 //delete[] cpu_peak_positions;
 
 	if(sample_value<float>(d_peak_values) < threshold)
 	{
@@ -155,7 +146,7 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
 	{
 		if( value < threshold )
-			{
+		{
 			value = -1.0f;
 		}
 		peak_values[blockIdx.x + blockIdx.y * gridDim.x] = value;
@@ -166,7 +157,7 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, float min_prominence, float min_sharpness)
+block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, uint peak_count, float min_sharpness)
 {
 	constexpr float P5[150] = {
 	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
@@ -209,15 +200,21 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	constexpr int2 patch_margins = { 2, 2 };
 	constexpr int patch_width = patch_margins.x * 2 + 1;
 	constexpr int Total_Samples = 25; // 5x5 polynomial fit
-	int peak_id = blockIdx.x;
+
+	int peak_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if( peak_id >= peak_count )
+	{
+		return; // Out of bounds
+	}
 
 	int2 peak_pos = peak_positions[peak_id];
 	int peak_offset = peak_pos.y * line_step + peak_pos.x;
 
 	float peak_value = peak_values[peak_id];
-	if( peak_value <= 0.0f )
+	if( peak_value < 0.0f )
 	{
-		return;
+		return; // Invalid peak, skip processing
 	}
 
 	float values[Total_Samples] = { 0.0f };
@@ -245,7 +242,6 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 		}
 	}
 
-
 	// Generate the polynomial fit (f is unused)
 	float coeff[6] = { 0.0f };
 	#pragma unroll
@@ -271,6 +267,8 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
 	float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
+
+	float calculated_peak = coeff[5];
 
 	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f)
 	{

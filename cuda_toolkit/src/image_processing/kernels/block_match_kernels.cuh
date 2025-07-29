@@ -49,7 +49,7 @@ namespace block_match
 
 		// Test the prominance and sharpness of the peaks, set any that fail to zero.
 		__global__ void
-			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, float min_prominence, float max_width);
+			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness);
 
 
 	}
