@@ -1,12 +1,23 @@
 #pragma once
-
+#include <npp.h>
 #include <span>
 #include "../../defs.h"
 
 
 namespace block_match
 {
-	static constexpr uint2 Peak_Detect_Block_Dims = { 8, 4 };
+	static constexpr dim3 Peak_Detect_Block_Dims = { 8, 4, 1 };
+
+	struct PipelineCtx {
+		NppStreamContext stream_context;
+		cudaStream_t stream;
+
+		u8* d_scratch_buffer = nullptr;
+		size_t scratch_buffer_size = 0;
+
+		float* d_corr_map = nullptr;
+		size_t corr_map_size = 0;
+	};
 
 	__host__ inline int2
 	find_peak(const float* d_corr_map, NppiSize dims)
@@ -42,10 +53,16 @@ namespace block_match
 	 * If there are no valid peaks it returns no_shift_pos.
 	 */
 	__host__ int2
-	find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, int line_step, int2 no_shift_pos, u8* d_scratch_buffer);
+	find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, int line_step, int2 no_shift_pos, u8* d_scratch_buffer, cudaStream_t stream );
 
 	
 	__host__ int2
 	select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos, int line_step);
+
+	__host__ bool
+	block_match_pipeline(const float* d_source, const float* d_template, const int2* motion_map,
+						 NppiSize src_roi, NppiSize tpl_roi,
+						 int src_line_step, int tpl_line_step, PipelineCtx& ctx,
+						 int2 no_shift_index, const NccMotionParameters& params);
 
 };

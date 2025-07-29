@@ -45,11 +45,11 @@ namespace block_match
 
 		// Each warp takes a 8x4 block and returns the peak position and value 
 		__global__ void
-			find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float threshold, float* peak_values, int2 * peak_positions);
+			find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float* peak_values, int2 * peak_positions);
 
 		// Test the prominance and sharpness of the peaks, set any that fail to zero.
 		__global__ void
-			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness);
+			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset);
 
 
 	}

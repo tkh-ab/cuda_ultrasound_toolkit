@@ -56,7 +56,7 @@ block_match::select_peak(const float* d_corr_map, NppiSize dims, const NccMotion
 
 
 __host__ int2
-block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, int line_step, int2 no_shift_pos, u8* d_scratch_buffer)
+block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, int line_step, int2 no_shift_pos, u8* d_scratch_buffer, cudaStream_t stream)
 {
 	int2 motion_vector = { 0, 0 };
 	int row_pitch = line_step / sizeof(float);
@@ -80,21 +80,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	dim3 block_dims = { Peak_Detect_Block_Dims.x, Peak_Detect_Block_Dims.y, 1 };
 	dim3 grid_dims = { patch_cols, patch_rows, 1 };
 
-	kernels::find_local_peaks_kernel<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, threshold, d_peak_values, d_peak_positions);
-
-	volatile cudaError_t err = cudaDeviceSynchronize();
-	if (err != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak detection synchronization: " << err << std::endl;
-		return motion_vector;
-	}
-
-	err = cudaGetLastError();
-	if (err != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak detection: " << err << std::endl << std::endl;
-		return no_shift_pos;
-	}
+	kernels::find_local_peaks_kernel<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_values, d_peak_positions);
 
 	block_dims = { WARP_SIZE, 1, 1 };
 	grid_dims = { (uint)ceilf((float)total_patches / (float)WARP_SIZE), 1, 1 };
@@ -105,16 +91,9 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
 	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
 
-	kernels::test_peaks<<<grid_dims, block_dims>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, total_patches, min_sharpness);
+	kernels::test_peaks<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, total_patches, min_sharpness);
 
-	cudaDeviceSynchronize();
-	if (cudaGetLastError() != cudaSuccess)
-	{
-		std::cerr << "CUDA error during peak testing: " << cudaGetErrorString(cudaGetLastError()) << std::endl;
-		return motion_vector;
-	}
-
-	thrust::sort_by_key(d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
+	thrust::sort_by_key(thrust::cuda::par.on(stream) , d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
 
 	if(sample_value<float>(d_peak_values) < threshold)
 	{
@@ -128,8 +107,10 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 
 
 __global__ void
-block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float threshold, float* peak_values, int2* peak_positions)
+block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float* peak_values, int2* peak_positions)
 {
+	static constexpr dim3 Peak_Detect_Block_Dims = { 8, 4, 1 };
+	
 	int2 pixel_pos = { static_cast<int>(threadIdx.x + blockIdx.x * Peak_Detect_Block_Dims.x),
 					   static_cast<int>(threadIdx.y + blockIdx.y * Peak_Detect_Block_Dims.y) };
 
@@ -145,10 +126,6 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
 	{
-		if( value < threshold )
-		{
-			value = -1.0f;
-		}
 		peak_values[blockIdx.x + blockIdx.y * gridDim.x] = value;
 		peak_positions[blockIdx.x + blockIdx.y * gridDim.x] = pixel_pos;
 	}
@@ -157,7 +134,7 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, uint peak_count, float min_sharpness)
+block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset)
 {
 	constexpr float P5[150] = {
 	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
@@ -211,17 +188,12 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	int2 peak_pos = peak_positions[peak_id];
 	int peak_offset = peak_pos.y * line_step + peak_pos.x;
 
-	float peak_value = peak_values[peak_id];
-	if( peak_value < 0.0f )
-	{
-		return; // Invalid peak, skip processing
-	}
-
 	float values[Total_Samples] = { 0.0f };
 
 	// Load the 5x5 patch around the peak position
 	int i = 0;
 	int n = 0;
+	float value = 0.0f;
 	#pragma unroll
 	for(int y = -patch_margins.y; y <= patch_margins.y; y++)
 	{
@@ -240,6 +212,14 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 			}
 			values[i++] = d_corr_map[peak_offset + y * line_step + x];
 		}
+	}
+
+	float peak = values[12]; // Center value of the patch
+	if(peak < 0.0f || peak < peak_threshold)
+	{
+		// If the peak is below the threshold, we mark it as invalid
+		peak_values[peak_id] = -1.0f; // Mark as invalid
+		return; // Invalid peak, skip processing
 	}
 
 	// Generate the polynomial fit (f is unused)
@@ -266,7 +246,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
-	float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
+	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
 
 	float calculated_peak = coeff[5];
 
@@ -281,4 +261,41 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 
 	return;
 
+}
+
+
+bool
+block_match::block_match_pipeline(const float* d_source, const float* d_template, const int2* motion_map,
+									NppiSize src_roi, NppiSize tpl_roi,
+									int src_line_step, int tpl_line_step, PipelineCtx& ctx,
+									int2 no_shift_index, const NccMotionParameters& params)
+{
+	NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
+										.height = src_roi.height - tpl_roi.height + 1 };
+
+	int corr_line_step = valid_corr_dims.width * sizeof(float);
+	int row_pitch = corr_line_step / sizeof(float);
+
+	int no_shift_offset = no_shift_index.y * row_pitch + no_shift_index.x;
+
+	float no_shift_value = sample_value<float>(ctx.d_corr_map + no_shift_offset);
+	float threshold = abs(no_shift_value) * params.correlation_threshold;
+
+	uint patch_cols = (uint)ceilf((float)valid_corr_dims.width / (float)Peak_Detect_Block_Dims.x);
+	uint patch_rows = (uint)ceilf((float)valid_corr_dims.height / (float)Peak_Detect_Block_Dims.y);
+
+	uint total_patches = patch_cols * patch_rows;
+
+	int2* d_peak_positions = (int2*)ctx.d_scratch_buffer;
+	float* d_peak_values = (float*)ctx.d_scratch_buffer + total_patches * sizeof(int2);
+	dim3 grid_dims = { patch_cols, patch_rows, 1 };
+
+
+	NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(d_source, src_line_step, src_roi, 
+													d_template, tpl_line_step, tpl_roi, 
+													ctx.d_corr_map, corr_line_step, 
+													ctx.d_scratch_buffer, ctx.stream_context);
+
+	
+	
 }

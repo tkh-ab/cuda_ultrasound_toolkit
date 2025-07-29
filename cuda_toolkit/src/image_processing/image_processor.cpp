@@ -31,7 +31,7 @@ show_corr_map(const float* d_corr_map, NppiSize dims, int line_step = 0)
 }
 
 NppStreamContext 
-ImageProcessor::_create_stream_context() 
+ImageProcessor::_create_stream_context(cudaStream_t stream) 
 {
     NppStreamContext ctx = {};
 
@@ -41,7 +41,7 @@ ImageProcessor::_create_stream_context()
     cudaDeviceProp props;
     cudaGetDeviceProperties(&props, device);
 
-    ctx.hStream = 0;  // Default stream, can be set to a specific stream if needed
+    ctx.hStream = stream;
 
     ctx.nCudaDeviceId = device;
     ctx.nMultiProcessorCount = props.multiProcessorCount;
@@ -59,19 +59,19 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 										int2* motion_maps, 
 										const NccMotionParameters& params)
 {
+	constexpr uint stream_count = 8; // Number of streams to use for processing
+
 	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
 	NppiSize tpl_roi = { (int)params.patch_size, (int)params.patch_size };
 	NppiSize src_roi = { tpl_roi.width + (int)search_margins.x * 2 + 1, 
 							tpl_roi.height + (int)search_margins.y * 2 };
 
-	if (!_create_buffers(src_roi, tpl_roi))
-		return false;
 
 	size_t motion_map_count = params.motion_grid_dims[0] * params.motion_grid_dims[1];
 	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
 	uint reference_frame = params.reference_frame;
 
-	
+	if (!_create_pipeline_ctxs(src_roi, tpl_roi, stream_count)) return false;
 
 	bool result = false;
 	for( uint i = 0; i < d_input_images.size(); ++i)
@@ -120,6 +120,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 
 	uint2 template_center = { patch_size / 2, patch_size / 2 };
 
+	uint stream_index = 0;
 	for( uint i = 0; i < motion_grid_dims.y; i++ ) // Rows
 	{
 		int tpl_center_y = i * grid_spacing;
@@ -167,30 +168,21 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 										.height = src_roi.height - tpl_roi.height + 1 };
 
 			int corr_line_step = valid_corr_dims.width * sizeof(float);
+			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
 
+			block_match::PipelineCtx& ctx = _pipeline_contexts[stream_index % _pipeline_contexts.size()];
 			
 			// Perform the NCC comparison
 
 			auto corr_start = std::chrono::high_resolution_clock::now();
 			volatile NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(source_corner, source_line_step, src_roi, 
 													template_corner, template_line_step, tpl_roi, 
-													_d_corr_map, corr_line_step, _d_scratch_buffer, _stream_context);
-			cudaDeviceSynchronize();
-			if (status != NPP_SUCCESS)
-			{
-				std::cerr << "Cross-correlation failed with status: " << status << std::endl;
-				return false;
-			}
-
-			auto corr_end = std::chrono::high_resolution_clock::now();
-			corr_duration += (corr_end - corr_start);
-
+													ctx.d_corr_map, corr_line_step, ctx.d_scratch_buffer, ctx.stream_context);
 			// Which value in the correlation map represents no motion.
-			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
+			
 	
 			auto peak_start = std::chrono::high_resolution_clock::now();
-			int2 motion_vector = block_match::find_peaks(_d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, _d_scratch_buffer);
-			cudaDeviceSynchronize();
+			int2 motion_vector = block_match::find_peaks(ctx.d_corr_map, valid_corr_dims, params, corr_line_step, no_shift_index, ctx.d_scratch_buffer);
 
 			auto peak_end = std::chrono::high_resolution_clock::now();
 			peak_duration += (peak_end - peak_start);
@@ -213,16 +205,15 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 }
 
 bool
-ImageProcessor::_create_buffers(NppiSize src_size, NppiSize tpl_size)
+ImageProcessor::_create_pipeline_ctxs(NppiSize src_size, NppiSize tpl_size, uint stream_count)
 {
-	_cleanup_buffers();
+	_clear_pipeline_contexts();
 	NppiSize valid_corr_dims = { .width = src_size.width - tpl_size.width + 1, 
 							 	 .height = src_size.height - tpl_size.height + 1 };
 
 	size_t valid_corr_size = valid_corr_dims.width * valid_corr_dims.height  * sizeof(float);
-
 	size_t scratch_buffer_size = 0;
-	NppStatus status = nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(valid_corr_dims, &scratch_buffer_size, _stream_context);
+	NppStatus status = nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(valid_corr_dims, &scratch_buffer_size, _default_stream_context);
 	if (status != NPP_SUCCESS)
 	{
 		std::cerr << "Failed to get buffer size for cross-correlation: " << status << std::endl;
@@ -231,10 +222,18 @@ ImageProcessor::_create_buffers(NppiSize src_size, NppiSize tpl_size)
 
 	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
 
-	std::cout << "Scratch buffer size: " << scratch_buffer_size << " bytes" << std::endl;
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_scratch_buffer, scratch_buffer_size));
-	_scratch_buffer_size = scratch_buffer_size;
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&_d_corr_map, valid_corr_size));
+	_pipeline_contexts.resize(stream_count);
+	for (auto& ctx : _pipeline_contexts)
+	{
+		CUDA_RETURN_IF_ERROR(cudaStreamCreate(&ctx.stream));
+		ctx.stream_context = _create_stream_context(ctx.stream);
+		ctx.scratch_buffer_size = scratch_buffer_size;
+		ctx.corr_map_size = valid_corr_size;
+
+		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_scratch_buffer, scratch_buffer_size));
+		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_corr_map, valid_corr_size));
+	}
+
 
 	return true;
 }
