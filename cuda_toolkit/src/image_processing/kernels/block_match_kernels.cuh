@@ -24,6 +24,7 @@ namespace block_match
 
 namespace kernels {
 
+	constexpr int 
 	
 	// Warp reduce to find the maximum value and its position
 	// Treating the int2 position as a single 64-bit integer for the intrinsics
@@ -49,9 +50,17 @@ namespace kernels {
 	__global__ void
 	find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float* peak_values, int2 * peak_positions);
 
+		// Each warp takes a 8x4 block and returns the peak position and value 
+	__global__ void
+	find_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float* peak_values, int2* peak_positions, uint peak_count);
+
 	// Test the prominance and sharpness of the peaks, set any that fail to zero.
 	__global__ void
 	test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset);
+
+	// Test the prominance and sharpness of the peaks, set any that fail to zero.
+	__global__ void
+	test_peaks2(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_values, float min_sharpness, int2 no_shift_pos, float threshold);
 
 
 
