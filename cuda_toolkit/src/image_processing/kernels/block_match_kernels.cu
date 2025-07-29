@@ -207,6 +207,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 };
 
 	constexpr int2 patch_margins = { 2, 2 };
+	constexpr int patch_width = patch_margins.x * 2 + 1;
 	constexpr int Total_Samples = 25; // 5x5 polynomial fit
 	int peak_id = blockIdx.x;
 
@@ -220,39 +221,35 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	}
 
 	float values[Total_Samples] = { 0.0f };
-	float border_rms = 0.0f;
 
-	// Load the 7x7 patch around the peak position
+	// Load the 5x5 patch around the peak position
 	int i = 0;
 	int n = 0;
 	#pragma unroll
 	for(int y = -patch_margins.y; y <= patch_margins.y; y++)
 	{
+		if (y + peak_pos.y < 0 || y + peak_pos.y >= dims.height)
+		{
+			i += patch_width;
+			continue; // Skip rows outside the image bounds
+		}
 		#pragma unroll
 		for(int x = -patch_margins.x; x <= patch_margins.x; x++)
 		{
-			values[i] = d_corr_map[peak_offset + y * line_step + x];
-
-			if( abs(x) == patch_margins.x || abs(y) == patch_margins.y)
+			if (x + peak_pos.x < 0 || x + peak_pos.x >= dims.width)
 			{
-				border_rms += values[i] * values[i]; // Accumulate the border values for RMS calculation
-				n++;
+				i++;
+				continue; // Skip columns outside the image bounds
 			}
-			i++;
+			values[i++] = d_corr_map[peak_offset + y * line_step + x];
 		}
 	}
 
-	// Average value at the edge of this patch
-	// Using for a quick and dirty prominance metric
-	border_rms = sqrtf(border_rms/n);
-	float prominance = (peak_value - border_rms) / peak_value;
-
-	
 
 	// Generate the polynomial fit (f is unused)
-	float coeff[5] = { 0.0f };
+	float coeff[6] = { 0.0f };
 	#pragma unroll
-	for(int i = 0; i < 5; i++)
+	for(int i = 0; i < 6; i++)
 	{
 		float sum = 0.0f;
 		#pragma unroll
@@ -273,18 +270,11 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
-	// if (prominance < min_prominence)
-	// {
-	// 	peak_values[peak_id] = -1.0f; // Mark as invalid
-	// 	return;
-	// }
+	float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
 
-	float width = sqrt( peak_value / (max_sharpness * 0.5f) );
-
-	if(max_sharpness < min_sharpness)
+	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f)
 	{
 		peak_values[peak_id] = -1.0f; // Mark as invalid
-		return;
 	}
 
 	// if(peak_id == 0)
