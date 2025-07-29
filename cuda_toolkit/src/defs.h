@@ -31,7 +31,7 @@ constexpr double PI_D = 3.141592653589793;
 
 constexpr int MAX_THREADS_PER_BLOCK = 128;
 constexpr int MAX_2D_BLOCK_DIM = 32;
-constexpr int WARP_SIZE = 32;
+constexpr uint WARP_SIZE = 32;
 constexpr int TOTAL_TOBE_CHANNELS = 256;
 
 typedef unsigned int uint;
@@ -63,6 +63,8 @@ typedef ptrdiff_t iptr;
 
 #define ADD_V2(v,u) {(v).x + (u).x, (v).y + (u).y}
 #define SUB_V2(v,u) {(v).x - (u).x, (v).y - (u).y}
+
+#define UINT_CEIL(a, b) (((a) + (b) - 1) / (b))
 
 
 inline double hamming_coef(int n, int N)

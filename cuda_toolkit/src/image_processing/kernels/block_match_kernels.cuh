@@ -22,35 +22,77 @@ namespace block_match
 		std::cout << std::endl;
 	}
 
-	namespace kernels {
-		// Warp reduce to find the maximum value and its position
-		// Treating the int2 position as a single 64-bit integer for the intrinsics
-		__inline__ __device__ void
-			warp_reduce_max(float* val, i64 * pos)
+namespace kernels {
+
+	
+	// Warp reduce to find the maximum value and its position
+	// Treating the int2 position as a single 64-bit integer for the intrinsics
+	__inline__ __device__ void
+	warp_reduce_max(float* val, i64 * pos)
+	{
+		static constexpr unsigned mask = 0xffffffffu;
+		static constexpr int warp_size = 32;
+		#pragma unroll
+		for (int offset = warp_size / 2; offset > 0; offset /= 2)
 		{
-			static constexpr unsigned mask = 0xffffffffu;
-			static constexpr int warp_size = 32;
-			#pragma unroll
-			for (int offset = warp_size / 2; offset > 0; offset /= 2)
+			float v2 = __shfl_down_sync(mask, *val, offset);
+			i64  p2 = __shfl_down_sync(mask, *pos, offset);
+			if (v2 > *val)
 			{
-				float v2 = __shfl_down_sync(mask, *val, offset);
-				i64  p2 = __shfl_down_sync(mask, *pos, offset);
-				if (v2 > *val)
-				{
-					*val = v2;
-					*pos = p2;
-				}
+				*val = v2;
+				*pos = p2;
 			}
 		}
-
-		// Each warp takes a 8x4 block and returns the peak position and value 
-		__global__ void
-			find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float* peak_values, int2 * peak_positions);
-
-		// Test the prominance and sharpness of the peaks, set any that fail to zero.
-		__global__ void
-			test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset);
-
-
 	}
+
+	// Each warp takes a 8x4 block and returns the peak position and value 
+	__global__ void
+	find_local_peaks_kernel(const float* d_corr_map, NppiSize dims, int row_pitch, float* peak_values, int2 * peak_positions);
+
+	// Test the prominance and sharpness of the peaks, set any that fail to zero.
+	__global__ void
+	test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_value, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset);
+
+
+
+	constexpr float P5[150] = {
+		0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
+		-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
+		-0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f,
+		-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
+		0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
+
+		0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+		0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+		0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+		0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+		0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
+
+		0.04f,       0.02f,       0.0f,      -0.02f,     -0.04f,
+		0.02f,       0.01f,       0.0f,      -0.01f,     -0.02f,
+		0.0f,        0.0f,        0.0f,       0.0f,       0.0f,
+		-0.02f,      -0.01f,       0.0f,       0.01f,      0.02f,
+		-0.04f,      -0.02f,       0.0f,       0.02f,      0.04f,
+
+		-0.04f, -0.04f, -0.04f, -0.04f, -0.04f,
+		-0.02f, -0.02f, -0.02f, -0.02f, -0.02f,
+		0.0f,   0.0f,   0.0f,   0.0f,   0.0f,
+		0.02f,  0.02f,  0.02f,  0.02f,  0.02f,
+		0.04f,  0.04f,  0.04f,  0.04f,  0.04f,
+
+		-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+		-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+		-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+		-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+		-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
+
+		-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f,
+		0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
+		0.04f,       0.125714f,   0.154286f,  0.125714f,   0.04f,
+		0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
+		-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
+	};
+
+
+}
 }

@@ -114,14 +114,15 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 	int2 pixel_pos = { static_cast<int>(threadIdx.x + blockIdx.x * Peak_Detect_Block_Dims.x),
 					   static_cast<int>(threadIdx.y + blockIdx.y * Peak_Detect_Block_Dims.y) };
 
-	if( pixel_pos.x >= dims.width || pixel_pos.y >= dims.height )
+	float value = 0.0f;
+	// We want to keep all threads alive for the warp reduction
+	// but don't want to read out of bounds, if this is a bad performance hit then fix it later
+	if( pixel_pos.x < dims.width && pixel_pos.y < dims.height )
 	{
-		return; // Out of bounds
+		value = d_corr_map[pixel_pos.y * line_step + pixel_pos.x];
 	}
 
-	float value = d_corr_map[pixel_pos.y * line_step + pixel_pos.x];
-
-	// Thread 0 in the warp will have the maximum value
+	// Thread 0 in the warp will have the maximum value after the reduction
 	warp_reduce_max(&value, reinterpret_cast<i64*>(&pixel_pos));
 
 	if( threadIdx.x == 0 && threadIdx.y == 0 )
@@ -136,46 +137,9 @@ block_match::kernels::find_local_peaks_kernel(const float* d_corr_map, NppiSize 
 __global__ void
 block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, uint peak_count, float min_sharpness, float peak_threshold, int no_shift_offset)
 {
-	constexpr float P5[150] = {
-	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
-	-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
-	-0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f,
-	-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
-	0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
-
-	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
-	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
-	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
-	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
-	0.0285714f, -0.0142857f, -0.0285714f, -0.0142857f,  0.0285714f,
-
-	0.04f,       0.02f,       0.0f,      -0.02f,     -0.04f,
-	0.02f,       0.01f,       0.0f,      -0.01f,     -0.02f,
-	0.0f,        0.0f,        0.0f,       0.0f,       0.0f,
-	-0.02f,      -0.01f,       0.0f,       0.01f,      0.02f,
-	-0.04f,      -0.02f,       0.0f,       0.02f,      0.04f,
-
-	-0.04f, -0.04f, -0.04f, -0.04f, -0.04f,
-	-0.02f, -0.02f, -0.02f, -0.02f, -0.02f,
-	0.0f,   0.0f,   0.0f,   0.0f,   0.0f,
-	0.02f,  0.02f,  0.02f,  0.02f,  0.02f,
-	0.04f,  0.04f,  0.04f,  0.04f,  0.04f,
-
-	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
-	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
-	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
-	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
-	-0.04f, -0.02f,  0.0f,   0.02f,  0.04f,
-
-	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f,
-	0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
-	0.04f,       0.125714f,   0.154286f,  0.125714f,   0.04f,
-	0.0114286f,  0.0971429f,  0.125714f,  0.0971429f,  0.0114286f,
-	-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
-};
-
-	constexpr int2 patch_margins = { 2, 2 };
-	constexpr int patch_width = patch_margins.x * 2 + 1;
+	
+	constexpr int2 Patch_Margins = { 2, 2 };
+	constexpr int Patch_Width = Patch_Margins.x * 2 + 1;
 	constexpr int Total_Samples = 25; // 5x5 polynomial fit
 
 	int peak_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -195,15 +159,15 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	int n = 0;
 	float value = 0.0f;
 	#pragma unroll
-	for(int y = -patch_margins.y; y <= patch_margins.y; y++)
+	for(int y = -Patch_Margins.y; y <= Patch_Margins.y; y++)
 	{
 		if (y + peak_pos.y < 0 || y + peak_pos.y >= dims.height)
 		{
-			i += patch_width;
+			i += Patch_Width;
 			continue; // Skip rows outside the image bounds
 		}
 		#pragma unroll
-		for(int x = -patch_margins.x; x <= patch_margins.x; x++)
+		for(int x = -Patch_Margins.x; x <= Patch_Margins.x; x++)
 		{
 			if (x + peak_pos.x < 0 || x + peak_pos.x >= dims.width)
 			{
@@ -214,15 +178,8 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 		}
 	}
 
-	float peak = values[12]; // Center value of the patch
-	if(peak < 0.0f || peak < peak_threshold)
-	{
-		// If the peak is below the threshold, we mark it as invalid
-		peak_values[peak_id] = -1.0f; // Mark as invalid
-		return; // Invalid peak, skip processing
-	}
-
-	// Generate the polynomial fit (f is unused)
+	
+	// Generate the polynomial fit 
 	float coeff[6] = { 0.0f };
 	#pragma unroll
 	for(int i = 0; i < 6; i++)
@@ -247,17 +204,15 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
 	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
-
+	float peak = values[12]; // Center value of the patch
 	float calculated_peak = coeff[5];
 
-	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f)
+	bool invalid_peak = max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < 0.0f || peak < peak_threshold;
+	if(invalid_peak)
 	{
-		peak_values[peak_id] = -1.0f; // Mark as invalid
+		peak_values[peak_id] = -1.0f;
 	}
 
-	// if(peak_id == 0)
-	// 	printf("Peak ID: %d, Position: (%d, %d), Value: %f, Width: %f\n", peak_id, peak_pos.x, peak_pos.y, peak_value, width);
-	
 
 	return;
 
@@ -281,13 +236,17 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	float no_shift_value = sample_value<float>(ctx.d_corr_map + no_shift_offset);
 	float threshold = abs(no_shift_value) * params.correlation_threshold;
 
-	uint patch_cols = (uint)ceilf((float)valid_corr_dims.width / (float)Peak_Detect_Block_Dims.x);
-	uint patch_rows = (uint)ceilf((float)valid_corr_dims.height / (float)Peak_Detect_Block_Dims.y);
+	uint patch_cols = UINT_CEIL((uint)valid_corr_dims.width, Peak_Detect_Block_Dims.x);
+	uint patch_rows = UINT_CEIL((uint)valid_corr_dims.height, Peak_Detect_Block_Dims.y);
 
-	uint total_patches = patch_cols * patch_rows;
+	// Pad the buffers so a full warp can be used
+	uint total_peaks = patch_cols * patch_rows;
+
+	uint warp_count = UINT_CEIL(total_peaks, WARP_SIZE);
+	uint padded_total = warp_count * WARP_SIZE;
 
 	int2* d_peak_positions = (int2*)ctx.d_scratch_buffer;
-	float* d_peak_values = (float*)ctx.d_scratch_buffer + total_patches * sizeof(int2);
+	float* d_peak_values = (float*)ctx.d_scratch_buffer + padded_total * sizeof(int2);
 	dim3 grid_dims = { patch_cols, patch_rows, 1 };
 
 
