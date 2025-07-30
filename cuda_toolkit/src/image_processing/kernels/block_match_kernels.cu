@@ -80,7 +80,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	dim3 block_dims = { Peak_Detect_Block_Dims.x, Peak_Detect_Block_Dims.y, 1 };
 	dim3 grid_dims = { patch_cols, patch_rows, 1 };
 
-	kernels::find_local_peaks_kernel<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_values, d_peak_positions);
+	//kernels::find_local_peaks_kernel<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_values, d_peak_positions);
 
 	block_dims = { WARP_SIZE, 1, 1 };
 	grid_dims = { (uint)ceilf((float)total_patches / (float)WARP_SIZE), 1, 1 };
@@ -91,7 +91,7 @@ block_match::find_peaks(const float* d_corr_map, NppiSize dims, const NccMotionP
 	thrust::device_ptr<float> d_peaks_ptr(d_peak_values);
 	thrust::device_ptr<int2> d_positions_ptr(d_peak_positions);
 
-	kernels::test_peaks<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, total_patches, min_sharpness);
+	//kernels::test_peaks<<<grid_dims, block_dims, 0, stream>>>(d_corr_map, dims, row_pitch, d_peak_positions, d_peak_values, total_patches, min_sharpness);
 
 	thrust::sort_by_key(thrust::cuda::par.on(stream) , d_peaks_ptr, d_peaks_ptr + total_patches, d_positions_ptr, thrust::greater<float>());
 
@@ -156,14 +156,13 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 		indicies[i] = i + threadIdx.x * Vals_Per_Thread;
 	}
 
-    
-	BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
+    BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
 	__syncthreads();
 
 	BlockRadixSort(sort_storage).SortDescendingBlockedToStriped(values, indicies);
 	__syncthreads();
 
-	if (threadIdx.x < )
+	if (threadIdx.x < PEAK_CANDIDATE_COUNT)
 	{
 		peak_values[threadIdx.x] = values[threadIdx.x];
 		int2 peak_pos = { indicies[threadIdx.x] % dims.width, indicies[threadIdx.x] / dims.width };
@@ -328,14 +327,14 @@ block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, N
 	float peak = values[12]; // Center value of the patch
 	float calculated_peak = coeff[5];
 
-	bool invalid_peak = max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < 0.0f || peak < threshold;
+	bool invalid_peak = max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold;
 	if(invalid_peak)
 	{
-		peak_values[peak_id] = -1.0f;
+		peak = -1.0f;
 	}
 
 	warp_reduce_max(&peak, reinterpret_cast<i64*>(&peak_pos));
-
+	
 	if (threadIdx.x == 0) 
 	{
 		*d_motion_map = peak_pos; // Store the peak position in the motion map
@@ -348,7 +347,7 @@ block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, N
 
 
 bool
-block_match::block_match_pipeline(const float* d_source, const float* d_template, const int2* d_motion_map,
+block_match::block_match_pipeline(const float* d_source, const float* d_template, int2* d_motion_map,
 									NppiSize src_roi, NppiSize tpl_roi,
 									int src_line_step, int tpl_line_step, PipelineCtx& ctx,
 									int2 no_shift_index, const NccMotionParameters& params)
@@ -376,12 +375,16 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	int2* d_peak_positions = (int2*)ctx.d_scratch_buffer;
 	float* d_peak_values = (float*)ctx.d_scratch_buffer + padded_total * sizeof(int2);
 	
-
-
 	NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(d_source, src_line_step, src_roi, 
 													d_template, tpl_line_step, tpl_roi, 
 													ctx.d_corr_map, corr_line_step, 
 													ctx.d_scratch_buffer, ctx.stream_context);
+
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "NPP error '"<< status <<"' during cross-correlation." << std::endl;
+		return false;
+	}
 
 	dim3 find_peaks_grid = { 1, 1, 1 };
 	dim3 find_peaks_block = { 256, 1, 1 };
@@ -390,5 +393,6 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	dim3 test_peaks_grid = { 1, 1, 1 };
 	dim3 test_peaks_block = { WARP_SIZE, 1, 1 };
 	kernels::test_peaks2<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, d_peak_positions, d_peak_values, params.min_patch_variance, no_shift_index, threshold);
-
+	
+	return true;
 }

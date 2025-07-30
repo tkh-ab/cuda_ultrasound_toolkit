@@ -23,9 +23,9 @@ namespace block_match
 	}
 
 namespace kernels {
-
-	constexpr int 
 	
+	constexpr uint PEAK_CANDIDATE_COUNT = 32; // Maximum number of peaks per block
+
 	// Warp reduce to find the maximum value and its position
 	// Treating the int2 position as a single 64-bit integer for the intrinsics
 	__inline__ __device__ void
@@ -64,7 +64,7 @@ namespace kernels {
 
 
 
-	constexpr float P5[150] = {
+	__device__ constexpr float P5[150] = {
 		0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,  0.0285714f,
 		-0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f, -0.0142857f,
 		-0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f, -0.0285714f,

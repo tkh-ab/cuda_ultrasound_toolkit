@@ -5,7 +5,7 @@
 #include <cuda_runtime.h>
 #include <span>
 
-#include <block_match.h>
+#include "kernels/block_match.h"
 
 #include "../defs.h"
 
@@ -52,6 +52,13 @@ private:
 
 		bool 
 		_compare_images(const PitchedArray<float>& template_image,
+							const PitchedArray<float>& source_image,
+							int2* motion_map,
+							uint2 image_dims,
+							const NccMotionParameters& params);
+
+		bool 
+		_compare_images2(const PitchedArray<float>& template_image,
 							const PitchedArray<float>& source_image,
 							int2* motion_map,
 							uint2 image_dims,

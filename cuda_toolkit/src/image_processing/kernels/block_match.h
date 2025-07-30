@@ -60,7 +60,7 @@ namespace block_match
 	select_peak(const float* d_corr_map, NppiSize dims, const NccMotionParameters& params, Npp8u* d_scratch_buffer, NppStreamContext stream_context, int2 no_shift_pos, int line_step);
 
 	__host__ bool
-	block_match_pipeline(const float* d_source, const float* d_template, const int2* d_motion_map,
+	block_match_pipeline(const float* d_source, const float* d_template, int2* d_motion_map,
 						 NppiSize src_roi, NppiSize tpl_roi,
 						 int src_line_step, int tpl_line_step, PipelineCtx& ctx,
 						 int2 no_shift_index, const NccMotionParameters& params);
