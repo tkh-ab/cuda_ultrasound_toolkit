@@ -164,7 +164,7 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 	if (threadIdx.x < PEAK_CANDIDATE_COUNT)
 	{
-		peak_values[threadIdx.x] = values[threadIdx.x];
+		peak_values[threadIdx.x] = values[0];
 		int2 peak_pos = { indicies[threadIdx.x] % dims.width, indicies[threadIdx.x] / dims.width };
 		peak_positions[threadIdx.x] = peak_pos;
 	}
@@ -258,7 +258,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, NppiSize dims, int lin
 }
 
 __global__ void
-block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, float min_sharpness, int2 no_shift_pos, float threshold)
+block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, float min_sharpness, int2 no_shift_pos, float threshold_factor)
 {
 	
 	constexpr int2 Patch_Margins = { 2, 2 };
@@ -326,9 +326,10 @@ block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, N
 	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
 	float peak = values[12]; // Center value of the patch
 	float calculated_peak = coeff[5];
+	float no_shift_peak = d_corr_map[no_shift_offset];
+	float threshold = abs(no_shift_peak) * threshold_factor;
 
-	bool invalid_peak = max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold;
-	if(invalid_peak)
+	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold)
 	{
 		peak = -1.0f;
 	}
@@ -337,6 +338,14 @@ block_match::kernels::test_peaks2(const float* d_corr_map, int2* d_motion_map, N
 	
 	if (threadIdx.x == 0) 
 	{
+		if (peak < 0)
+		{
+			peak_pos = { 0,0 };
+		}
+		else
+		{
+			peak_pos = SUB_V2(peak_pos, no_shift_pos);
+		}
 		*d_motion_map = peak_pos; // Store the peak position in the motion map
 	}
 	return;
@@ -357,11 +366,6 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 
 	int corr_line_step = valid_corr_dims.width * sizeof(float);
 	int row_pitch = corr_line_step / sizeof(float);
-
-	int no_shift_offset = no_shift_index.y * row_pitch + no_shift_index.x;
-
-	float no_shift_value = sample_value<float>(ctx.d_corr_map + no_shift_offset);
-	float threshold = abs(no_shift_value) * params.correlation_threshold;
 
 	uint patch_cols = UINT_CEIL((uint)valid_corr_dims.width, Peak_Detect_Block_Dims.x);
 	uint patch_rows = UINT_CEIL((uint)valid_corr_dims.height, Peak_Detect_Block_Dims.y);
@@ -392,7 +396,10 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 
 	dim3 test_peaks_grid = { 1, 1, 1 };
 	dim3 test_peaks_block = { WARP_SIZE, 1, 1 };
-	kernels::test_peaks2<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, d_peak_positions, d_peak_values, params.min_patch_variance, no_shift_index, threshold);
+	kernels::test_peaks2<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(
+							ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, 
+							d_peak_positions, d_peak_values, params.min_patch_variance, 
+							no_shift_index, params.correlation_threshold);
 	
 	return true;
 }
