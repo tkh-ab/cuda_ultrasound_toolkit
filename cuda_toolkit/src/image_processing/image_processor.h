@@ -58,13 +58,6 @@ private:
 							const NccMotionParameters& params);
 
 		bool 
-		_compare_images2(const PitchedArray<float>& template_image,
-							const PitchedArray<float>& source_image,
-							int2* motion_map,
-							uint2 image_dims,
-							const NccMotionParameters& params);
-
-		bool 
 		_compare_images_batched(const PitchedArray<float>& template_image,
 							const PitchedArray<float>& source_image,
 							int2* motion_map,
