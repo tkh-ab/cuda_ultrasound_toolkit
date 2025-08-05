@@ -44,7 +44,7 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, float min_sharpness, int2 no_shift_pos, float threshold_factor)
+block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
 {
 	
 	constexpr int2 Patch_Margins = { 2, 2 };
@@ -52,6 +52,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	constexpr int Total_Samples = 25; // 5x5 polynomial fit
 
 	int peak_id = threadIdx.x;
+	
 
 	int2 peak_pos = peak_positions[peak_id];
 	int peak_offset = peak_pos.y * line_step + peak_pos.x;
@@ -113,7 +114,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	float peak = values[12]; // Center value of the patch
 	float calculated_peak = coeff[5];
 	float no_shift_peak = d_corr_map[no_shift_offset];
-	float threshold = abs(no_shift_peak) * threshold_factor;
+	float threshold = abs(no_shift_peak) * rel_threshold;
 
 	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold)
 	{
@@ -121,17 +122,10 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	}
 
 	warp_reduce_max(&peak, reinterpret_cast<i64*>(&peak_pos));
-	
-	if (threadIdx.x == 0) 
+
+	if (threadIdx.x == 0 && peak > abs_threshold)
 	{
-		if (peak < 0)
-		{
-			peak_pos = { 0,0 };
-		}
-		else
-		{
-			peak_pos = SUB_V2(peak_pos, no_shift_pos);
-		}
+		peak_pos = SUB_V2(peak_pos, no_shift_pos);
 		*d_motion_map = peak_pos; // Store the peak position in the motion map
 	}
 	return;
@@ -184,8 +178,8 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	dim3 test_peaks_block = { WARP_SIZE, 1, 1 };
 	kernels::test_peaks<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(
 							ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, 
-							d_peak_positions, d_peak_values, params.min_patch_variance, 
-							no_shift_index, params.correlation_threshold);
+							d_peak_positions, d_peak_values, no_shift_index,
+							params.min_patch_variance, params.rel_cor_threshold, params.abs_cor_threshold);
 	
 	return true;
 }

@@ -64,7 +64,8 @@ typedef struct NccMotionParameters
 	uint motion_grid_spacing;	// [pixels] Spacing between sample patches
 	uint motion_grid_dims[2];	    // [rows, cols] Dimensions of the motion grid
 	uint search_margins[2];		// [rows, cols] how far outside the patch to search for motion (symmetric)
-	float correlation_threshold;// Threshold for the peak to be considered valid relative to the value for no motion.
+	float abs_cor_threshold;	// Absolute threshold for the correlation value to be considered valid
+	float rel_cor_threshold;	// Threshold for the peak to be considered valid relative to the value for no motion.
 	float min_patch_variance; 	// Minimum variance of the search patch, if its too flat we won't get a good result
 	uint reference_frame;		// Frame to use as the reference for the computation
 	uint frame_count;			// Number of frames in the input data

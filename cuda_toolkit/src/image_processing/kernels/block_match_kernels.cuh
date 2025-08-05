@@ -53,7 +53,9 @@ namespace kernels {
 
 	// Test the prominance and sharpness of the peaks, set any that fail to zero.
 	__global__ void
-	test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2 * peak_positions, float* peak_values, float min_sharpness, int2 no_shift_pos, float threshold);
+	test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int corr_line_step, 
+			   int2 * peak_positions, float* peak_values, int2 no_shift_pos,
+			   float min_sharpness, float rel_threshold, float abs_threshold);
 
 
 
