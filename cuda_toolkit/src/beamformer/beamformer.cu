@@ -124,12 +124,34 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 		std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
 		return false;
 	}
-	// Perform the beamforming operation
-	return _per_voxel_beamform(d_input, d_output);
+	bool result = false;
+
+	if(bp.das_shader_id == SequenceId::UFORCES)
+	{
+		if(bp.sparse_elements[0] == -1)
+		{
+			std::cerr << "Beamformer: UFORCES requires sparse elements to be defined." << std::endl;	
+			return false;
+		}
+
+		short* d_uforces_elements = nullptr;
+		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_uforces_elements, sizeof(short) * bp.dec_data_dim[2]));
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)d_uforces_elements, bp.sparse_elements, sizeof(short) * bp.dec_data_dim[2], cudaMemcpyHostToDevice));
+
+		std::cout << "UFORCES beamforming." << std::endl;
+		result = _uforces_beamform(d_input, d_output, d_uforces_elements);
+		CUDA_NULL_FREE(d_uforces_elements);
+	}
+	else if (bp.das_shader_id == SequenceId::FORCES)
+	{
+		result = _readi_forces_beamform(d_input, d_output);
+	}
+
+	return result;
 }
 
 bool
-Beamformer::_per_voxel_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
+Beamformer::_readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 {
     std::cout << "Starting beamform." << std::endl;
 
@@ -156,6 +178,38 @@ Beamformer::_per_voxel_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
         bf_kernels::forces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
     
+
+    CUDA_RETURN_IF_ERROR(cudaGetLastError());
+    CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
+
+
+    return true;
+}
+
+bool
+Beamformer::_uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const short* uforces_elements)
+{
+    std::cout << "Starting beamform." << std::endl;
+
+    float* d_hadamard_row = _d_beamformer_hadamard;
+    if(_constants.readi_group_count > 1)
+    {
+        // We just want the relevant row for this group
+        d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
+    }
+
+    uint3 vox_counts = _constants.voxel_dims;
+    uint xy_count = vox_counts.x * vox_counts.y;
+    dim3 grid_dim = { (xy_count + MAX_THREADS_PER_BLOCK -1) / MAX_THREADS_PER_BLOCK, vox_counts.z, 1 };
+    dim3 block_dim = { MAX_THREADS_PER_BLOCK, 1, 1 };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    bf_kernels::uforces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, uforces_elements);
 
     CUDA_RETURN_IF_ERROR(cudaGetLastError());
     CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());

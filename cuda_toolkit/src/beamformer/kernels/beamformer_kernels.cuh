@@ -23,6 +23,9 @@ namespace bf_kernels
     __global__ void
     forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 
+	__global__ void
+    uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforces_elements);
+
     __host__ bool
 	copy_kernel_constants(const BeamformerConstants& constants);
 

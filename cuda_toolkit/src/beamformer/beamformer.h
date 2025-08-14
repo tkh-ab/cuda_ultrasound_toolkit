@@ -28,7 +28,9 @@ private:
     float* _d_beamformer_hadamard = nullptr;
 
     bool _params_to_constants(const CudaBeamformerParameters& bp);
-    bool _per_voxel_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume);
+    bool _readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume);
+
+	bool _uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const short* uforces_elements);
 
     bf_kernels::BeamformerConstants _constants;      // Current beamformer constants
 };
