@@ -105,7 +105,7 @@ typedef struct CudaBeamformerParameters
 
 	float f_number;					// Dynamic receive apodization F# 
 	bool interpolate;				// Interpolate between samples during beamforming 
-	bool coherency_weighting;		// Apply coherency factor weighting to output data
+	float coherency_weighting;		// Apply coherency factor weighting to output data raised to the power of this value
 
 	/*
 	*	Large arrays seperate from the main BP

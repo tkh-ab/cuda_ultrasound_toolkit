@@ -86,7 +86,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
     float coherent_sum = NORM_SQUARE_F2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
-	coherency_factor = powf(coherency_factor, 1/5.f);
+	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
 	total = SCALE_F2(total, coherency_factor);
@@ -168,7 +168,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
     float coherent_sum = NORM_SQUARE_F2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
-	coherency_factor = powf(coherency_factor, 1/3.f);
+	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
 	total = SCALE_F2(total, coherency_factor);

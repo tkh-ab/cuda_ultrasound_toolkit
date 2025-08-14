@@ -35,6 +35,7 @@ namespace bf_kernels
         float3 volume_mins;
         float3 resolutions;
         float f_number;
+		float coherency_weighting;
 
         // Sequence Constants
         u8 mixes_count;

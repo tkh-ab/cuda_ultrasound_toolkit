@@ -61,7 +61,8 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     {
         constants.focal_direction = bf_kernels::FocalDirection::XZ_PLANE;
     }
-    
+
+	constants.coherency_weighting = min(max(bp.coherency_weighting, 0.0f), 1.0f);
 
     bool readi_count_changed = (_constants.readi_group_count != bp.readi_group_count ||
                                 _constants.readi_order != bp.readi_ordering);
