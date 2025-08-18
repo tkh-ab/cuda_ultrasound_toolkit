@@ -113,6 +113,12 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
 	float peak = values[12]; // Center value of the patch
 	float calculated_peak = coeff[5];
+
+	// if(calculated_peak < peak)
+	// {
+	// 	printf("Calculated peak %f < peak %f at position (%d, %d)\n", calculated_peak, peak, peak_pos.x, peak_pos.y);
+	// }
+	//peak = calculated_peak;
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
 

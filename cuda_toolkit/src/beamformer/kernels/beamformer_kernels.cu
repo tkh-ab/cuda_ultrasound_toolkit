@@ -94,7 +94,6 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 	volume[volume_offset] = total;
 }
 
-
 __global__ void
 uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforces_elements)
 {

@@ -13,6 +13,13 @@
 #include <vector>
 #include <complex>
 
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <locale>
+#include <sstream>
+
 #include <iostream>
 
 #include <npp.h>
@@ -268,6 +275,36 @@ struct PitchedArray
 		return true;
 	}
 };
+
+inline bool dump_csv(const std::filesystem::path& file_path,
+                     const float* data,
+                     std::size_t rows,
+                     std::size_t cols,
+                     std::size_t row_stride = 0,
+                     char delimiter = ',',
+                     int precision = 6)
+{
+    if (!data || rows == 0 || cols == 0) return false;
+    if (row_stride == 0) row_stride = cols;
+
+    std::ofstream out(file_path, std::ios::out | std::ios::trunc);
+    if (!out) return false;
+
+    out.imbue(std::locale::classic());
+    out.setf(std::ios::fmtflags(0), std::ios::floatfield);
+    out << std::setprecision(precision);
+
+    for (std::size_t r = 0; r < rows; ++r) {
+        const float* row_ptr = data + r * row_stride;
+        if (cols > 0) {
+            out << row_ptr[0];
+            for (std::size_t c = 1; c < cols; ++c) out << delimiter << row_ptr[c];
+        }
+        out << '\n';
+        if (!out) return false;
+    }
+    return true;
+}
 
 
 namespace types

@@ -195,14 +195,6 @@ bool
 Beamformer::_uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const short* uforces_elements)
 {
     std::cout << "Starting beamform." << std::endl;
-
-    float* d_hadamard_row = _d_beamformer_hadamard;
-    if(_constants.readi_group_count > 1)
-    {
-        // We just want the relevant row for this group
-        d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
-    }
-
     uint3 vox_counts = _constants.voxel_dims;
     uint xy_count = vox_counts.x * vox_counts.y;
     dim3 grid_dim = { (xy_count + MAX_THREADS_PER_BLOCK -1) / MAX_THREADS_PER_BLOCK, vox_counts.z, 1 };
