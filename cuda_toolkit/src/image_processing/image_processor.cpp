@@ -50,7 +50,9 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 	uint reference_frame = params.reference_frame;
 
 	int2* d_motion_map;
-	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_motion_map, motion_map_count * sizeof(int2) * d_input_images.size()));
+	size_t motion_map_size = motion_map_count * sizeof(int2) * d_input_images.size();
+	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_motion_map, motion_map_size));
+	CUDA_RETURN_IF_ERROR(cudaMemset(d_motion_map, 0, motion_map_size));
 
 	if (!_create_pipeline_ctxs(src_roi, tpl_roi, stream_count)) return false;
 
@@ -73,7 +75,7 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 	}
 
 	// Copy the motion maps to the output
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(motion_maps, d_motion_map, motion_map_count * sizeof(int2) * d_input_images.size(), cudaMemcpyDeviceToHost));
+	CUDA_RETURN_IF_ERROR(cudaMemcpy(motion_maps, d_motion_map, motion_map_size, cudaMemcpyDeviceToHost));
 	cudaFree(d_motion_map);
 
 	return result;
