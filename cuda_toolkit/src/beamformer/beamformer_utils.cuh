@@ -19,6 +19,7 @@ namespace bf_kernels::utils
         }
         else
         {
+            // Plane wave
             tx_distance = {0.0f, 0.0f, vox_loc.z };
         }
 
