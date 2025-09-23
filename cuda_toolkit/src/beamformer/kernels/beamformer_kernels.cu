@@ -197,7 +197,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 
 	// If the voxel is out of the f_number defined range for all elements skip it
 	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
-	float3 focal_point = {Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, vox_loc.y, 0.0f};
+	float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
 
 	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
 	float3 rx_vec = {	Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 
@@ -267,7 +267,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 __host__ bool
 copy_kernel_constants(const BeamformerConstants& constants)
 {
-	CUDA_RETURN_IF_ERROR(cudaMemcpyToSymbol(Beamformer_Constants, &constants, sizeof(constants)));
+	CUDA_RETURN_IF_ERROR(cudaMemcpyToSymbol(Beamformer_Constants, &constants, sizeof(BeamformerConstants)));
 	return true;
 }
 
