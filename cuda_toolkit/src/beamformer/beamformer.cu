@@ -147,6 +147,16 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	{
 		result = _readi_forces_beamform(d_input, d_output);
 	}
+	else if (bp.das_shader_id == SequenceId::HERCULES)
+	{
+		result = _readi_hercules_beamform(d_input, d_output);
+	}
+	else
+	{
+		std::cerr << "Beamformer: Unsupported sequence ID " << static_cast<int>(bp.das_shader_id) << std::endl;
+		throw std::runtime_error("Unsupported sequence ID.");
+		return false;
+	}
 
 	return result;
 }
@@ -177,6 +187,46 @@ Beamformer::_readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
     else
     {
         bf_kernels::forces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
+    }
+    
+
+    CUDA_RETURN_IF_ERROR(cudaGetLastError());
+    CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
+
+
+    return true;
+}
+
+bool
+Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
+{
+    std::cout << "Starting beamform." << std::endl;
+
+    float* d_hadamard_row = _d_beamformer_hadamard;
+    if(_constants.readi_group_count > 1)
+    {
+        // We just want the relevant row for this group
+        d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
+    }
+
+    uint3 vox_counts = _constants.voxel_dims;
+    uint xy_count = vox_counts.x * vox_counts.y;
+    dim3 grid_dim = { (xy_count + MAX_THREADS_PER_BLOCK -1) / MAX_THREADS_PER_BLOCK, vox_counts.z, 1 };
+    dim3 block_dim = { MAX_THREADS_PER_BLOCK, 1, 1 };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    if (_constants.readi_order == ReadiOrdering::WALSH)
+    {
+        throw std::runtime_error("HERCULES sequence does not support WALSH ordering.");
+    }
+    else
+    {
+        bf_kernels::hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
     
 
