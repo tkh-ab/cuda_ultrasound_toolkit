@@ -47,9 +47,10 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
 
     float3 focal_point = {0.0f, 0.0f, bp.focal_depths[0]};
     constants.focal_point = focal_point;
-    if(focal_point.z == INFINITY)
+    if(focal_point.z == INFINITY || focal_point.z == -INFINITY)
     {
         constants.focal_direction = bf_kernels::FocalDirection::PLANE;
+        constants.focal_point.z = 0.0f;
     }
     else if(bp.das_shader_id == SequenceId::HERCULES 
         || bp.das_shader_id == SequenceId::UHURCULES
