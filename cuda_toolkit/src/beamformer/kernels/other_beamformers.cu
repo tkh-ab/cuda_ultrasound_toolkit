@@ -235,7 +235,7 @@ namespace bf_kernels
     }
 
 	__global__ void
-walsh_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard_row)
+walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard_row)
 {
 	uint xy_voxel = threadIdx.x + blockIdx.x * blockDim.x;
 	if (xy_voxel > Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y)

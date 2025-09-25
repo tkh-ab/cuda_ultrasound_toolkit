@@ -183,7 +183,7 @@ Beamformer::_readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 
     if (_constants.readi_order == ReadiOrdering::WALSH)
     {
-        bf_kernels::walsh_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
+        bf_kernels::walsh_forces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
     else
     {
@@ -223,7 +223,7 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
 
     if (_constants.readi_order == ReadiOrdering::WALSH)
     {
-        throw std::runtime_error("HERCULES sequence does not support WALSH ordering.");
+        bf_kernels::walsh_hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
     else
     {
