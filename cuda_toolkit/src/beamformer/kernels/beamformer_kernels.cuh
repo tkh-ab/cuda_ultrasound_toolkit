@@ -9,7 +9,7 @@
 namespace bf_kernels
 {
     __global__ void
-    walsh_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
+    walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 
     __global__ void
     per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
@@ -28,6 +28,9 @@ namespace bf_kernels
 
 	__global__ void
     hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
+
+	__global__ void
+    walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 
     __host__ bool
 	copy_kernel_constants(const BeamformerConstants& constants);
