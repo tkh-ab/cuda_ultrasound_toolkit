@@ -210,7 +210,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 	float incoherent_sum = 0.0f;
 
 	float starting_x = rx_vec.x;
-
+	//starting_x = -Beamformer_Constants.pitches.x/2;
 	
 	uint sample_count = Beamformer_Constants.sample_count;
 	uint channel_count = Beamformer_Constants.channel_count;
@@ -219,9 +219,11 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 	for (int g = 0; g < readi_group_count; g++)
 	{
 		float hadamard_value = hadamard_row[g];
-		for (int t = 0; t < Beamformer_Constants.tx_count; t++)
+		// for (int t = 0; t < Beamformer_Constants.tx_count; t++)
+		for (int t = 0; t < 128; t++)
 		{
-			for (int e = 0; e < channel_count; e++)
+			// for (int e = 0; e < channel_count; e++)
+			for (int e = 0; e < 128; e = e + 1)
 			{
 				size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 				float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
