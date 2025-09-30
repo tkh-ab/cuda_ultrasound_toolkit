@@ -150,11 +150,23 @@ cuda_toolkit::beamform(std::span<const uint8_t> input_data,
         return false;
     }
 
-    if (!rf_processor.convert_decode_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
-    {
-        std::cerr << "Failed to decode RF data." << std::endl;
-        return false;
-    }
+	if(bp.decode)
+	{
+		if (!rf_processor.convert_decode_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+		{
+			std::cerr << "Failed to decode RF data." << std::endl;
+			return false;
+		}
+	}
+	else
+	{
+		if (!rf_processor.convert_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+		{
+			std::cerr << "Failed to convert RF data." << std::endl;
+			return false;
+		}
+	}
+    
 
 	if (!rf_processor.hilbert_transform_strided((float*)buffers.d_decoded, buffers.d_rf))
 	{

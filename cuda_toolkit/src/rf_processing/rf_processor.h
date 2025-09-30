@@ -33,6 +33,7 @@ public:
     bool set_match_filter(std::span<const float> match_filter);
 
 	bool convert_decode_strided(void* d_input, cuComplex* d_output, InputDataTypes type);
+	bool convert_strided(void* d_input, cuComplex* d_output, InputDataTypes type);
     
     bool hilbert_transform_strided(float* d_input, cuComplex* d_output);
 
