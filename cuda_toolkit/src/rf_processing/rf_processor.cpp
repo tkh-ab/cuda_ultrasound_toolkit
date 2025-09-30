@@ -149,6 +149,31 @@ RfProcessor::convert_decode_strided(void* d_input, cuComplex* d_output, InputDat
 }
 
 bool
+RfProcessor::convert_strided(void* d_input, cuComplex* d_output, InputDataTypes type)
+{
+	if (!_init)
+	{
+		std::cerr << "Session not initialized." << std::endl;
+		return false;
+	}
+
+    bool result = _data_converter->convert(d_input, _decode_buffers.d_decoded, type, 
+        { _rf_raw_dim.x, _rf_raw_dim.y }, { _dec_data_dim.x, _dec_data_dim.y, _dec_data_dim.z });
+    
+    if (!result)
+    {
+        std::cerr << "Failed to convert data." << std::endl;
+        return false;
+    }
+
+    // Decode output is packed real floats, but OGL expects complex 
+    // so do a strided copy to fit interleaved complex 
+    size_t data_count = _decoded_data_count();
+    CUDA_FLOAT_TO_COMPLEX_COPY(_decode_buffers.d_decoded, d_output, data_count);
+    return result;
+}
+
+bool
 RfProcessor::hilbert_transform_strided(float* d_input, cuComplex* d_output)
 {
     if (!_init)
