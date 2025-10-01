@@ -219,11 +219,9 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 	for (int g = 0; g < readi_group_count; g++)
 	{
 		float hadamard_value = hadamard_row[g];
-		// for (int t = 0; t < Beamformer_Constants.tx_count; t++)
-		for (int t = 0; t < 128; t++)
+		for (int t = 0; t < Beamformer_Constants.tx_count; t++)
 		{
-			// for (int e = 0; e < channel_count; e++)
-			for (int e = 0; e < 128; e = e + 1)
+			for (int e = 0; e < channel_count; e++)
 			{
 				size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 				float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
