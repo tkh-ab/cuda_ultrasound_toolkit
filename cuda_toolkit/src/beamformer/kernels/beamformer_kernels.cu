@@ -61,10 +61,6 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
-				 if (t == 0)
-				 {
-				     value = SCALE_F2(value, I_SQRT_128);
-				 }
 				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 
