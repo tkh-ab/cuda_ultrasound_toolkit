@@ -39,7 +39,7 @@ public:
 
 	uint get_pipeline_count() const
 	{
-		return _pipeline_contexts.size();
+		return static_cast<uint>(_pipeline_contexts.size());
 	}
 
 
