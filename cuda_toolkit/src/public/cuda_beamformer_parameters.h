@@ -81,7 +81,7 @@ typedef struct CudaBeamformerParameters
 	float xdc_transform[16];		// 4x4 Orientation Matrix for the transducer, (column major order)
 	float xdc_element_pitch[2];		// [m] Transducer Element Pitch {row, col}
 
-	uint rf_raw_dim[2];		// Raw Data Dimensions [samples * transmits + padding, total_channels (rows + cols)]
+	uint rf_raw_dim[4];		// Raw Data Dimensions [samples * transmits + padding, total_channels (rows + cols)]
 	uint dec_data_dim[4];	// Expected dimensions after decoding [samples, rx_channels, transmits]; last element ignored
 
 	bool decode;					// Decode or just reshape data
