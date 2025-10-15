@@ -71,6 +71,9 @@ typedef ptrdiff_t iptr;
 #define ADD_V2(v,u) {(v).x + (u).x, (v).y + (u).y}
 #define SUB_V2(v,u) {(v).x - (u).x, (v).y - (u).y}
 
+#define ADD_V3(v,u) {(v).x + (u).x, (v).y + (u).y, (v).z + (u).z}
+#define SUB_V3(v,u) {(v).x - (u).x, (v).y - (u).y, (v).z - (u).z}
+
 #define UINT_CEIL(a, b) (((a) + (b) - 1) / (b))
 
 

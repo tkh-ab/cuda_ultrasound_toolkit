@@ -68,6 +68,7 @@ namespace rf_fft
         CUDA_RETURN_IF_ERROR(cudaMemset(_d_filter, 0x00, final_filter_size)); // Padded with zeros to signal_length
         CUDA_FLOAT_TO_COMPLEX_COPY(match_filter.data(), _d_filter, filter_length);
 
+		// Filter is provided in time domain, take FFT 
         cufftHandle plan;
         CUFFT_RETURN_IF_ERR(cufftPlan1d(&plan, signal_length, CUFFT_C2C, 1));
         CUFFT_RETURN_IF_ERR(cufftExecC2C(plan, _d_filter, _d_filter, CUFFT_FORWARD));
