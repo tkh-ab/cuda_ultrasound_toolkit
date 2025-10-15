@@ -430,5 +430,4 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 	volume[volume_offset] = total;
 }
 
-
 }

@@ -37,6 +37,9 @@ namespace bf_kernels
 
     template<SequenceId SEQUENCE, ReadiOrdering READI_ORDER> __global__ void
     readi_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
+	
+	__global__ void
+	tobe_beamform(const cuComplex* rfData, cuComplex* volume);
 }
 
 

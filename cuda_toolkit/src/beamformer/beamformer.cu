@@ -228,6 +228,12 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
     else
     {
         bf_kernels::hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
+
+		// TEMP TEST OF NEW KERNEL
+		//block_dim = { 16, 16, 1 };
+		//uint xz_count = vox_counts.x * vox_counts.z;
+		//grid_dim = { (xz_count + 255) / 256, vox_counts.y, 1 };
+		//bf_kernels::tobe_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume);
     }
     
 
