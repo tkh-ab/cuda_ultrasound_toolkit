@@ -351,6 +351,111 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 }
 
 
+/*
+* Dispatch blocks for each xz 16x16 patch, block wide calculate the delay for the center of the patch,
+* load 64 samples either side of that and store the center idx
+* each thread/pixel calculates its delay relative to the center idx.
+*
+*
+* Repeat for each transmit, repeat for each channel
+*
+* Block Dims: 16x16
+* Grid Dims: (vox_dims.x*vox_dims.z/256, voxel_dims.y)
+*
+* Getting this to work with basic hercules before anything else.
+*/
+__global__ void
+tobe_beamform(const cuComplex* rfData, cuComplex* volume)
+{
+
+	__shared__ cuComplex shared_rf_data[128];
+
+	uint x_block = blockIdx.x % (Beamformer_Constants.voxel_dims.x / blockDim.x);
+	uint z_block = blockIdx.x / (Beamformer_Constants.voxel_dims.x / blockDim.x);
+	uint y_voxel = blockIdx.y;
+
+	uint3 voxel_idx = { x_block * blockDim.x + threadIdx.x, y_voxel, z_block * blockDim.y + threadIdx.y };
+
+	uint linear_thread_idx = threadIdx.y * blockDim.x + threadIdx.x;
+
+	float3 block_loc = {
+		Beamformer_Constants.volume_mins.x + (x_block * 16 + 7.5) * Beamformer_Constants.resolutions.x,
+		Beamformer_Constants.volume_mins.y + (y_voxel)*Beamformer_Constants.resolutions.y,
+		Beamformer_Constants.volume_mins.z + (z_block * 16 + 7.5) * Beamformer_Constants.resolutions.z,
+	};
+
+	float3 vox_loc =
+	{
+		Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
+		Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
+		Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
+	};
+
+	float3 vox_offset = SUB_V3(vox_loc, block_loc);
+	float3 focal_point = { 0.0f, 0.0f, Beamformer_Constants.focal_point.z };
+
+	float3 tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - block_loc.x + Beamformer_Constants.pitches.x / 2,
+						Beamformer_Constants.xdc_mins.y - block_loc.y + Beamformer_Constants.pitches.y / 2, block_loc.z };
+
+	float3 vox_tx_vec = ADD_V2(tx_vec, vox_offset);
+
+	float starting_x = rx_vec.x;
+
+	uint sample_count = Beamformer_Constants.sample_count;
+	uint channel_count = Beamformer_Constants.channel_count;
+	float samples_per_meter = Beamformer_Constants.samples_per_meter;
+	int delay_samples = Beamformer_Constants.delay_samples;
+
+	cuComplex total = { 0.0f, 0.0f }, value;
+	for (int t = 0; t < Beamformer_Constants.tx_count; t++)
+	{
+		for (int e = 0; e < Beamformer_Constants.channel_count; e++)
+		{
+			float3 vox_rx_vec = SUB_V3(rx_vec, vox_offset);
+			size_t channel_offset = channel_count * sample_count * t + sample_count * e;
+			float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
+			float block_scan_index = total_distance * samples_per_meter + delay_samples - 64.0f;
+
+			if (block_scan_index < 0 || block_scan_index > sample_count - 128)
+			{
+				rx_vec.x += Beamformer_Constants.pitches.x;
+				continue;
+			}
+
+			if (linear_thread_idx < 128)
+			{
+				shared_rf_data[linear_thread_idx] = rfData[channel_offset + (int)(block_scan_index)+linear_thread_idx];
+			}
+			__syncthreads();
+
+			total_distance = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f);
+			float vox_scan_index = total_distance * samples_per_meter + delay_samples;
+
+			float rel_scan_index = vox_scan_index - block_scan_index + 64.0f;
+
+			value = utils::cubic_spline(0, rel_scan_index, shared_rf_data);
+
+			float apo = utils::f_num_apodization(NORM_F2(vox_rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+			value = SCALE_F2(value, apo);
+
+			rx_vec.x += Beamformer_Constants.pitches.x;
+
+		}
+		rx_vec.x = starting_x;
+		rx_vec.y += Beamformer_Constants.pitches.y;
+	}
+
+	if (voxel_idx.x < Beamformer_Constants.voxel_dims.x && voxel_idx.y < Beamformer_Constants.voxel_dims.y && voxel_idx.z < Beamformer_Constants.voxel_dims.z)
+	{
+		size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+		volume[volume_offset] = total;
+	}
+
+	return;
+}
+
+
 __host__ bool
 copy_kernel_constants(const BeamformerConstants& constants)
 {

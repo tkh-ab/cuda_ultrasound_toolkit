@@ -64,10 +64,12 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 		auto start = std::chrono::high_resolution_clock::now();
 		if( i == reference_frame ) continue;
 
+		uint frame_diff = abs((int)i - (int)reference_frame);
+
 		PitchedArray<float>* template_image = d_input_images.data() + reference_frame;
 		PitchedArray<float>* source_image = d_input_images.data() + i;
 
-		result &= _compare_images( *template_image, *source_image, d_motion_map + i * motion_map_count, image_dims, params);
+		result &= _compare_images( *template_image, *source_image, d_motion_map + i * motion_map_count, image_dims, params, frame_diff);
 
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed = end - start;
@@ -122,10 +124,21 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
 						int2* d_motion_map, 
 						uint2 image_dims, 
-						const NccMotionParameters& params)
+						const NccMotionParameters& params,
+						uint frame_diff)
 {
 	std::chrono::duration<double> corr_duration = std::chrono::duration<double>::zero();
 	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
+
+	if(params.scale_dims[0])
+	{
+		search_margins.x = (int)(search_margins.x * frame_diff);
+	}
+	if(params.scale_dims[1])
+	{
+		search_margins.y = (int)(search_margins.y * frame_diff);
+	}
+
 	uint patch_size = params.patch_size;
 
 	int template_line_step = (int)template_image.pitch;

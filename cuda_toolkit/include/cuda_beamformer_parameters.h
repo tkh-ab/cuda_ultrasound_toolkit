@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #define MAX_CHANNEL_COUNT 256
+#define MAX_FILTER_LENGTH 1024
 
 typedef unsigned int uint;
 
@@ -62,7 +63,8 @@ typedef struct NccMotionParameters
 {
 	uint patch_size; 			// Patch size in pixels (assumed square)
 	uint motion_grid_spacing;	// [pixels] Spacing between sample patches
-	uint motion_grid_dims[2];	    // [rows, cols] Dimensions of the motion grid
+	uint motion_grid_dims[2];	// [rows, cols] Dimensions of the motion grid
+	uint scale_dims[2];			// [rows, cols] If true, the value gives the margin for adjacent frames and should be scaled for farther comparisons
 	uint search_margins[2];		// [rows, cols] how far outside the patch to search for motion (symmetric)
 	float abs_cor_threshold;	// Absolute threshold for the correlation value to be considered valid
 	float rel_cor_threshold;	// Threshold for the peak to be considered valid relative to the value for no motion.
@@ -126,8 +128,8 @@ typedef struct CudaBeamformerParameters
 	uint mixes_offset;		// Cross offset at the center of the array
 	uint mixes_rows[128];	// Cross row IDs (same for columns)
 
-	uint filter_length;		// Length of the filter
-	float rf_filter[1024];			// Time domain kernel of the filter (assumed to be sampled at fs)
+	uint filter_length;		// Length of the filter 
+	float rf_filter[MAX_FILTER_LENGTH]; // Time domain kernel of the filter (assumed to be sampled at fs) (MAX 1024)
 
 	InputDataTypes data_type;		// Type of the raw data being passed in
 } CudaBeamformerParameters;
