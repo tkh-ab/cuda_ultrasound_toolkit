@@ -399,7 +399,6 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 						Beamformer_Constants.xdc_mins.y - block_loc.y + Beamformer_Constants.pitches.y / 2, -block_loc.z };
 
 	float3 vox_tx_vec = ADD_V3(tx_vec, vox_offset);
-	
 	float3 vox_rx_vec = SUB_V3(rx_vec,vox_offset);
 
 	float starting_x = rx_vec.x;
@@ -417,7 +416,7 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 		{
 			size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 			float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
-			float block_scan_index = total_distance * samples_per_meter + delay_samples - 64.0f;
+			float block_scan_index = floorf(total_distance * samples_per_meter + delay_samples - 64.0f);
 
 			if (block_scan_index < 0 || block_scan_index > sample_count - 128)
 			{
@@ -437,9 +436,9 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 
 			float rel_scan_index = vox_scan_index - block_scan_index;
 
-			//value = utils::cubic_spline(0, rel_scan_index, shared_rf_data);
+			value = utils::cubic_spline(0, rel_scan_index, shared_rf_data);
 
-			value = utils::cubic_spline(channel_offset, vox_scan_index, rfData);
+			//value = utils::cubic_spline(channel_offset, vox_scan_index, rfData);
 
 			float apo = utils::f_num_apodization(NORM_F2(vox_rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 			value = SCALE_F2(value, apo);
