@@ -76,6 +76,8 @@ typedef ptrdiff_t iptr;
 
 #define UINT_CEIL(a, b) (((a) + (b) - 1) / (b))
 
+#define CLAMP(x, lower, upper) ( min( max((x), (lower)), (upper) ) )
+
 
 inline double hamming_coef(int n, int N)
 {
