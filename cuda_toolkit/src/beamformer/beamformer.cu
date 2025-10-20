@@ -227,13 +227,18 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
     }
     else
     {
-        // bf_kernels::hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
-
-		/*TEMP TEST OF NEW KERNEL*/
-		block_dim = { 16, 1, 16 };
-		uint xz_count = vox_counts.x * vox_counts.z;
-		grid_dim = { (vox_counts.x + 15) / 16, vox_counts.y, (vox_counts.z + 15) / 16 };
-		bf_kernels::tobe_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume);
+		bool test = true;
+		if (!test)
+		{
+        	bf_kernels::hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
+		}
+		else
+		{
+			/*TEMP TEST OF NEW KERNEL*/
+			block_dim = { 16, 1, 16 };
+			grid_dim = { (vox_counts.x + 15) / 16, (vox_counts.y + Y_BLOCK_SIZE - 1) / Y_BLOCK_SIZE, (vox_counts.z + 15) / 16 };
+			bf_kernels::tobe_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume);
+		}
     }
     
 

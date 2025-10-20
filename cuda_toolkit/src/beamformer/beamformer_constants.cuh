@@ -6,6 +6,8 @@
 
 static constexpr float CUDART_PI_F = 3.141592654F;
 static constexpr uint MAX_TX_COUNT = 128;
+
+static constexpr uint Y_BLOCK_SIZE = 8;
 namespace bf_kernels
 {
     enum class FocalDirection
