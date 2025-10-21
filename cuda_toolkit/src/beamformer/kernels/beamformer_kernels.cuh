@@ -39,7 +39,7 @@ namespace bf_kernels
     readi_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 	
 	__global__ void
-	tobe_beamform(const cuComplex* rfData, cuComplex* volume);
+	block_beamform(const cuComplex* rfData, cuComplex* volume);
 }
 
 

@@ -365,7 +365,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 * Getting this to work with basic hercules before anything else.
 */
 __global__ void
-tobe_beamform(const cuComplex* rfData, cuComplex* volume)
+block_beamform(const cuComplex* rfData, cuComplex* volume)
 {
 
 	static constexpr uint smem_padding = 2;
@@ -373,11 +373,11 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 
 	cuComplex value_store[Y_BLOCK_SIZE] = {0.0f, 0.0f};
 
-	uint x_block = blockIdx.x;
-	uint y_block = blockIdx.y;
-	uint z_block = blockIdx.z;
+	// uint x_block = blockIdx.x;
+	// uint y_block = blockIdx.y;
+	// uint z_block = blockIdx.z;
 
-	uint3 voxel_idx = { x_block * blockDim.x + threadIdx.x, y_block * Y_BLOCK_SIZE, z_block * blockDim.z + threadIdx.z };
+	uint3 voxel_idx = { blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * Y_BLOCK_SIZE + threadIdx.y, blockIdx.z * blockDim.z + threadIdx.z };
 	uint linear_thread_idx = threadIdx.z * blockDim.x + threadIdx.x;
 
 	if(linear_thread_idx < 128 + smem_padding * 2)
@@ -387,9 +387,9 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 	__syncthreads();
 
 	float3 block_loc = {
-		Beamformer_Constants.volume_mins.x + (x_block * blockDim.x + blockDim.x/2) * Beamformer_Constants.resolutions.x,
-		Beamformer_Constants.volume_mins.y + (y_block * Y_BLOCK_SIZE + Y_BLOCK_SIZE/2) * Beamformer_Constants.resolutions.y,
-		Beamformer_Constants.volume_mins.z + (z_block * blockDim.z + blockDim.z/2) * Beamformer_Constants.resolutions.z,
+		Beamformer_Constants.volume_mins.x + (blockIdx.x * blockDim.x + blockDim.x/2) * Beamformer_Constants.resolutions.x,
+		Beamformer_Constants.volume_mins.y + (blockIdx.y * Y_BLOCK_SIZE + Y_BLOCK_SIZE/2) * Beamformer_Constants.resolutions.y,
+		Beamformer_Constants.volume_mins.z + (blockIdx.z * blockDim.z + blockDim.z/2) * Beamformer_Constants.resolutions.z,
 	};
 
 	float3 vox_loc =
@@ -399,7 +399,7 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 		Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
 	};
 
-	float3 tx_loc = { 0.0f, 0.0f, 0.0f};
+	//float3 tx_loc = { 0.0f, 0.0f, 0.0f};
 	float3 rx_loc = {
 		Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2,
 		Beamformer_Constants.xdc_mins.y + Beamformer_Constants.pitches.y / 2,
@@ -410,10 +410,10 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 
 	float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
 
-	uint sample_count = Beamformer_Constants.sample_count;
-	uint channel_count = Beamformer_Constants.channel_count;
-	float samples_per_meter = Beamformer_Constants.samples_per_meter;
-	int delay_samples = Beamformer_Constants.delay_samples;
+	// uint sample_count = Beamformer_Constants.sample_count;
+	// uint channel_count = Beamformer_Constants.channel_count;
+	// float samples_per_meter = Beamformer_Constants.samples_per_meter;
+	// int delay_samples = Beamformer_Constants.delay_samples;
 
 	cuComplex value;
 	for (int t = 0; t < Beamformer_Constants.tx_count; t++)
@@ -422,18 +422,18 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 		for (int e = 0; e < Beamformer_Constants.channel_count; e++)
 		{
 			rx_loc.x = starting_rx_loc.x + e * Beamformer_Constants.pitches.x;
-			size_t channel_offset = channel_count * sample_count * t + sample_count * e;
 
 			float3 block_tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focal_direction);
 			float3 block_rx_vec = SUB_V3(rx_loc, block_loc);
 
-			float total_block_distance = utils::total_path_length(block_tx_vec, block_rx_vec, focal_point.z, 1.0f);
-			float block_scan_index = floorf(total_block_distance * samples_per_meter + delay_samples - 64.0f);
+			//float total_block_distance = utils::total_path_length(block_tx_vec, block_rx_vec, focal_point.z, 1.0f);
+			float block_scan_index = floorf(utils::total_path_length(block_tx_vec, block_rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples - 64.0f);
 
-			block_scan_index = CLAMP(block_scan_index, 0.0f, (float)(sample_count - 128));
+			block_scan_index = CLAMP(block_scan_index, 0.0f, (float)(Beamformer_Constants.sample_count - 128));
 
 			if (linear_thread_idx < 128)
 			{
+				size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t + Beamformer_Constants.sample_count * e;
 				shared_rf_data[linear_thread_idx + smem_padding] = rfData[channel_offset + (int)(block_scan_index)+linear_thread_idx];
 			}
 			__syncthreads();
@@ -446,14 +446,14 @@ tobe_beamform(const cuComplex* rfData, cuComplex* volume)
 				float3 vox_tx_vec = utils::calc_tx_distance(current_vox_loc, focal_point, Beamformer_Constants.focal_direction);
 				float3 vox_rx_vec = SUB_V3(rx_loc, current_vox_loc);
 
-				float total_vox_distance = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f);
-				float vox_scan_index = total_vox_distance * samples_per_meter + delay_samples;
+				//float total_vox_distance = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f);
+				float vox_scan_index = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples;
 
 				// The cubic spline needs 2 integer samples either side of the decimal index
-				float rel_scan_index = vox_scan_index - block_scan_index;
+				vox_scan_index = vox_scan_index - block_scan_index;
 				
-				rel_scan_index = CLAMP(rel_scan_index, 0.0f, 127.0f);
-				value = utils::cubic_spline(smem_padding, rel_scan_index, shared_rf_data);
+				vox_scan_index = CLAMP(vox_scan_index, 0.0f, 127.0f);
+				value = utils::cubic_spline(smem_padding, vox_scan_index, shared_rf_data);
 
 				float apo = utils::f_num_apodization(NORM_F2(vox_rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
