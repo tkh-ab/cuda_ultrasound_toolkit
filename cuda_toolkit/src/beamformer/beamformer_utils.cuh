@@ -51,7 +51,7 @@ namespace bf_kernels::utils
         static constexpr float C_SPLINE = 0.5f;
 
         // Hermite basis matrix (transposed for row vector * matrix order)
-        float h[4][4] = {
+        static constexpr float h[4][4] = {
             { 2.0f, -2.0f,  1.0f,  1.0f},
             {-3.0f,  3.0f, -2.0f, -1.0f},
             { 0.0f,  0.0f,  1.0f,  0.0f},

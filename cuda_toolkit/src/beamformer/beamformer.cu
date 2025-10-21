@@ -47,7 +47,7 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
 
     float3 focal_point = {0.0f, 0.0f, bp.focal_depths[0]};
     constants.focal_point = focal_point;
-    if(focal_point.z == INFINITY || focal_point.z == -INFINITY)
+    if(isinf(constants.focal_point.z))
     {
         constants.focal_direction = bf_kernels::FocalDirection::PLANE;
         constants.focal_point.z = 0.0f;
@@ -237,7 +237,7 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
 			/*TEMP TEST OF NEW KERNEL*/
 			block_dim = { 16, 1, 16 };
 			grid_dim = { (vox_counts.x + 15) / 16, (vox_counts.y + Y_BLOCK_SIZE - 1) / Y_BLOCK_SIZE, (vox_counts.z + 15) / 16 };
-			bf_kernels::tobe_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume);
+			bf_kernels::block_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume);
 		}
     }
     

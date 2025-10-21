@@ -166,6 +166,8 @@ IF %ERRORLEVEL% LEQ 1 (
       <Optimization>Od</Optimization>
       <SplitCompile>Default</SplitCompile>
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
+      <PtxAsOptionV>false</PtxAsOptionV>
+      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -214,6 +216,8 @@ IF %ERRORLEVEL% LEQ 1 (
       <Optimization>Od</Optimization>
       <SplitCompile>MaxThreads</SplitCompile>
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
+      <PtxAsOptionV>false</PtxAsOptionV>
+      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
     </CudaCompile>
     <CudaLink>
       <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
