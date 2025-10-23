@@ -315,6 +315,7 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 			switch(_constants.focal_direction)
 			{
 				case bf_kernels::FocalDirection::PLANE:
+                   // grid_dims.y = 1;
 					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
 					break;
 				case bf_kernels::FocalDirection::YZ_PLANE:
