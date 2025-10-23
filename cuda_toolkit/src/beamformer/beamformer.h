@@ -34,5 +34,7 @@ private:
 
 	bool _uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const short* uforces_elements);
 
+	bool _test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume);
+
     bf_kernels::BeamformerConstants _constants;      // Current beamformer constants
 };
