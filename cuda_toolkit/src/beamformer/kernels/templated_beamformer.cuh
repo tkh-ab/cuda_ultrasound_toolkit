@@ -25,7 +25,7 @@ namespace bf_kernels
 	{
 		if constexpr (SEQ == SequenceId::FORCES)
 		{
-			return make_float3(Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, 0.0f, 0.0f);
+			return make_float3(vox_loc.x - (Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2), 0.0f, vox_loc.z);
 		}
 		else if constexpr (SEQ == SequenceId::HERCULES)
 		{
@@ -75,8 +75,10 @@ namespace bf_kernels
 	{
 		if constexpr (SEQ == SequenceId::FORCES)
 		{
+			// tx vector is voxel_loc - focus so as we move left to right on the array
+			// we need to subtract the pitch
 			float x_offset = transmit_idx * pitches.x;
-			return make_float3(initial_vec.x + x_offset, initial_vec.y, initial_vec.z);
+			return make_float3(initial_vec.x - x_offset, 0.0f, initial_vec.z);
 		}
 		else if constexpr (SEQ == SequenceId::HERCULES)
 		{
@@ -130,7 +132,15 @@ namespace bf_kernels
 			Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
 		};
 
-		float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
+		float3 focal_point;
+		if constexpr (SEQ == SequenceId::FORCES)
+		{
+			focal_point = { 0.0f, 0.0f, 0.0f };
+		}
+		else
+		{
+			focal_point = { 0.0f, 0.0f, Beamformer_Constants.focal_point.z };
+		}
 
 		float3 initial_tx = initial_tx_vec<SEQ, DIR>(Beamformer_Constants.xdc_mins,
 													 Beamformer_Constants.pitches,
