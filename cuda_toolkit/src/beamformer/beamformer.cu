@@ -305,6 +305,7 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
 	auto start = std::chrono::high_resolution_clock::now();
 
+	// This is gonna get out of hand fast, consider macro generation like Randy's stuff
 	switch(_constants.sequence)
 	{
 		case FORCES:
