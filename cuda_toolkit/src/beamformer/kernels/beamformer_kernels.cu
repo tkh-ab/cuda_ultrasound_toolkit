@@ -226,10 +226,6 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
-				//  if (t == 0)
-				//  {
-				//      value = SCALE_F2(value, I_SQRT_128);
-				//  }
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 
@@ -405,8 +401,8 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 		Beamformer_Constants.xdc_mins.y + Beamformer_Constants.pitches.y / 2,
 		0.0f
 	};
-	
-	float3 starting_rx_loc = rx_loc;
+
+	float2 starting_rx_loc = {rx_loc.x, rx_loc.y};
 
 	float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
 
@@ -423,11 +419,11 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 		{
 			rx_loc.x = starting_rx_loc.x + e * Beamformer_Constants.pitches.x;
 
-			float3 block_tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focal_direction);
-			float3 block_rx_vec = SUB_V3(rx_loc, block_loc);
+			float3 tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focal_direction);
+			float3 rx_vec = SUB_V3(rx_loc, block_loc);
 
-			//float total_block_distance = utils::total_path_length(block_tx_vec, block_rx_vec, focal_point.z, 1.0f);
-			float block_scan_index = floorf(utils::total_path_length(block_tx_vec, block_rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples - 64.0f);
+			//float total_block_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
+			float block_scan_index = floorf(utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples - 64.0f);
 
 			block_scan_index = CLAMP(block_scan_index, 0.0f, (float)(Beamformer_Constants.sample_count - 128));
 
@@ -443,11 +439,11 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 				float3 current_vox_loc = vox_loc;
 				current_vox_loc.y += y * Beamformer_Constants.resolutions.y;
 
-				float3 vox_tx_vec = utils::calc_tx_distance(current_vox_loc, focal_point, Beamformer_Constants.focal_direction);
-				float3 vox_rx_vec = SUB_V3(rx_loc, current_vox_loc);
+				tx_vec = utils::calc_tx_distance(current_vox_loc, focal_point, Beamformer_Constants.focal_direction);
+				rx_vec = SUB_V3(rx_loc, current_vox_loc);
 
-				//float total_vox_distance = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f);
-				float vox_scan_index = utils::total_path_length(vox_tx_vec, vox_rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples;
+				//float total_vox_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
+				float vox_scan_index = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f) * Beamformer_Constants.samples_per_meter + Beamformer_Constants.delay_samples;
 
 				// The cubic spline needs 2 integer samples either side of the decimal index
 				vox_scan_index = vox_scan_index - block_scan_index;
@@ -455,7 +451,7 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 				vox_scan_index = CLAMP(vox_scan_index, 0.0f, 127.0f);
 				value = utils::cubic_spline(smem_padding, vox_scan_index, shared_rf_data);
 
-				float apo = utils::f_num_apodization(NORM_F2(vox_rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
 
 				value_store[y] = ADD_V2(value_store[y], value);

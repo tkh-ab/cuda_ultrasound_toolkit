@@ -153,13 +153,13 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	int corr_line_step = valid_corr_dims.width * sizeof(float);
 	int row_pitch = corr_line_step / sizeof(float);
 
-	uint patch_cols = UINT_CEIL((uint)valid_corr_dims.width, Peak_Detect_Block_Dims.x);
-	uint patch_rows = UINT_CEIL((uint)valid_corr_dims.height, Peak_Detect_Block_Dims.y);
+	uint patch_cols = UINT_DIV_CEIL((uint)valid_corr_dims.width, Peak_Detect_Block_Dims.x);
+	uint patch_rows = UINT_DIV_CEIL((uint)valid_corr_dims.height, Peak_Detect_Block_Dims.y);
 
 	// Pad the buffers so a full warp can be used
 	uint total_peaks = patch_cols * patch_rows;
 
-	uint warp_count = UINT_CEIL(total_peaks, WARP_SIZE);
+	uint warp_count = UINT_DIV_CEIL(total_peaks, WARP_SIZE);
 	uint padded_total = warp_count * WARP_SIZE;
 
 	int2* d_peak_positions = (int2*)ctx.d_scratch_buffer;

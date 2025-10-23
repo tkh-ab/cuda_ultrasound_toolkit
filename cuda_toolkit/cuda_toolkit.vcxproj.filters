@@ -79,6 +79,7 @@
     <ClInclude Include="src\image_processing\image_processor.h" />
     <ClInclude Include="src\image_processing\kernels\block_match.h" />
     <ClInclude Include="src\image_processing\kernels\block_match_kernels.cuh" />
+    <ClInclude Include="src\beamformer\kernels\templated_beamformer.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\beamformer\beamformer.cu" />

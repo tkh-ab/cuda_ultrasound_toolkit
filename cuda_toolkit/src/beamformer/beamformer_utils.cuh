@@ -8,6 +8,7 @@ namespace bf_kernels::utils
     __device__ inline float3
     calc_tx_distance(float3 vox_loc, float3 source_pos, FocalDirection direction)
     {
+		// TODO, these are backwards, update but make sure nothing regresses
         float3 tx_distance;
         if (direction == FocalDirection::XZ_PLANE)
         {

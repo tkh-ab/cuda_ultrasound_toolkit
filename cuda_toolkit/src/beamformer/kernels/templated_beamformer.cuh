@@ -1,0 +1,186 @@
+#pragma once
+
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
+
+#include "../../defs.h"
+#include "../beamformer_constants.cuh"
+#include "../beamformer_utils.cuh"
+
+namespace bf_kernels
+{
+	// TODO: If this works remove the other one in beamformer_kernels.cu
+	__host__ bool
+	copy_kernel_constants1(const BeamformerConstants& constants)
+	{
+		CUDA_RETURN_IF_ERROR(cudaMemcpyToSymbol(Beamformer_Constants, &constants, sizeof(BeamformerConstants)));
+		return true;
+	}
+
+	template <SequenceId SEQ>
+	concept SupportedDASSequence = (SEQ == SequenceId::FORCES) || (SEQ == SequenceId::HERCULES);
+
+	template<SequenceId SEQ, FocalDirection DIR> __device__ inline float3 
+	initial_tx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc, const float3 focal_point)
+	{
+		if constexpr (SEQ == SequenceId::FORCES)
+		{
+			return make_float3(Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, 0.0f, 0.0f);
+		}
+		else if constexpr (SEQ == SequenceId::HERCULES)
+		{
+			if constexpr (DIR == FocalDirection::PLANE)
+			{
+				return make_float3(0.0f, 0.0f, vox_loc.z);
+			}
+			else if constexpr (DIR == FocalDirection::XZ_PLANE)
+			{
+				return make_float3(vox_loc.x - focal_point.x, 0.0f, vox_loc.z - focal_point.z);
+			}
+			else if constexpr (DIR == FocalDirection::YZ_PLANE)
+			{
+				return make_float3(0.0f, vox_loc.y - focal_point.y, vox_loc.z - focal_point.z);
+			}
+			else if constexpr (DIR == FocalDirection::SPHERE)
+			{
+				static_assert(false, "Spherical focusing not supported for HERCULES");
+			}
+		}
+		else
+		{
+			static_assert(false, "Unsupported sequence for DAS beamforming");
+		}
+	}
+
+	template<SequenceId SEQ> __device__ inline float3 
+	initial_rx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc)
+	{
+		if constexpr (SEQ == SequenceId::FORCES)
+		{
+			return make_float3(Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2 -vox_loc.x, 0.0f, -vox_loc.z);
+		}
+		else if constexpr (SEQ == SequenceId::HERCULES)
+		{
+			return make_float3(Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2 - vox_loc.x,
+							   Beamformer_Constants.xdc_mins.y + Beamformer_Constants.pitches.y / 2 - vox_loc.y, -vox_loc.z);
+		}
+		else
+		{
+			static_assert(false, "Unsupported sequence for DAS beamforming");
+		}
+	}
+
+	template<SequenceId SEQ> __device__ inline float3
+	calc_tx_vector(float3 initial_vec, uint transmit_idx, float2 pitches)
+	{
+		if constexpr (SEQ == SequenceId::FORCES)
+		{
+			float x_offset = transmit_idx * pitches.x;
+			return make_float3(initial_vec.x + x_offset, initial_vec.y, initial_vec.z);
+		}
+		else if constexpr (SEQ == SequenceId::HERCULES)
+		{
+			return initial_vec;
+		}
+		else
+		{
+			static_assert(false, "Unsupported sequence for DAS beamforming");
+		}
+	}
+	
+	template<SequenceId SEQ> __device__ inline float3
+	calc_rx_vector(float3 initial_vec, uint channel_idx, uint transmit_idx, float2 pitches)
+	{
+		if constexpr (SEQ == SequenceId::FORCES)
+		{
+			float x_offset = channel_idx * pitches.x;
+			return make_float3(initial_vec.x + x_offset, initial_vec.y, initial_vec.z);
+		}
+		else if constexpr (SEQ == SequenceId::HERCULES)
+		{
+			float x_offset = channel_idx * pitches.x;
+			float y_offset = transmit_idx * pitches.y;
+			return make_float3(initial_vec.x + x_offset, initial_vec.y + y_offset, initial_vec.z);
+		}
+		else
+		{
+			static_assert(false, "Unsupported sequence for DAS beamforming");
+		}
+	}
+
+	__device__ inline float calc_total_distance(float3 tx_vec, float3 rx_vec, float focal_depth)
+	{
+		// Tx vec is from the focus -> the voxel.
+		// If its z value is negative then we are between the transducer and the focus.
+		return focal_depth + NORM_F3(rx_vec) + NORM_F3(tx_vec) * copysignf(1.0f, tx_vec.z);
+	}
+	
+	/* Each dim in thread and block ID corresponds with a voxel dim for now */
+    template<SequenceId SEQ, FocalDirection DIR> requires SupportedDASSequence<SEQ> __global__ void
+    das_beamform(const cuComplex* rf_data, cuComplex* volume)
+	{
+		// TODO: Check if inlining this to the vox_loc calculation drops the register count
+		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
+							threadIdx.y + blockIdx.y * blockDim.y,
+							threadIdx.z + blockIdx.z * blockDim.z };
+
+		const float3 vox_loc = {
+			Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
+			Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
+			Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
+		};
+
+		float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
+
+		float3 initial_tx = initial_tx_vec<SEQ, DIR>(Beamformer_Constants.xdc_mins,
+													 Beamformer_Constants.pitches,
+													 vox_loc,
+													 focal_point);
+
+		float3 initial_rx = initial_rx_vec<SEQ>(Beamformer_Constants.xdc_mins,
+											   Beamformer_Constants.pitches,
+											   vox_loc);
+
+		float incoherent_sum = 0.0f;
+		cuComplex total = {0.0f, 0.0f};
+		for (int t = 0; t < Beamformer_Constants.tx_count; t++)
+		{
+			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
+			{
+				static constexpr float APO_MIN = 0.0f;
+				float3 rx_vec = calc_rx_vector<SEQ>(initial_rx, c, t, Beamformer_Constants.pitches);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+
+				if(true)
+				{
+					float3 tx_vec = calc_tx_vector<SEQ>(initial_tx, t, Beamformer_Constants.pitches);
+
+					float scan_index = calc_total_distance(tx_vec, rx_vec, focal_point.z) 
+									   * Beamformer_Constants.samples_per_meter 
+									   + Beamformer_Constants.delay_samples;
+
+					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
+					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t + Beamformer_Constants.sample_count * c;
+					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);
+					value = SCALE_F2(value, apo);
+					total = ADD_V2(total, value);
+					incoherent_sum += NORM_SQUARE_F2(value);
+				}
+			}
+		}
+
+		float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+		coherency_factor = utils::clear_nan(coherency_factor);
+
+		if(COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
+		{
+			size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+			volume[volume_offset] = total;
+		}
+		
+	}
+
+}
+
+
