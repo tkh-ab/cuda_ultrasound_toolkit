@@ -74,6 +74,8 @@ typedef ptrdiff_t iptr;
 #define ADD_V3(v,u) {(v).x + (u).x, (v).y + (u).y, (v).z + (u).z}
 #define SUB_V3(v,u) {(v).x - (u).x, (v).y - (u).y, (v).z - (u).z}
 
+#define FMA_V2(value,scale,sum) {((value).x * (scale)) + (sum).x, ((value).y * (scale)) + (sum).y}
+
 #define COMPARE_LT_V3(v,u) ((v).x < (u).x && (v).y < (u).y && (v).z < (u).z)
 
 #define UINT_DIV_CEIL(n, d) (((n) + (d) - 1) / (d))

@@ -219,22 +219,27 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 		{
 			for (int e = 0; e < channel_count; e++)
 			{
-				size_t channel_offset = channel_count * sample_count * t + sample_count * e;
-				float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
-				float scan_index = total_distance * samples_per_meter + delay_samples;
-				scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
-
-				value = utils::cubic_spline(channel_offset, scan_index, rfData);
-
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				static constexpr float APO_MIN = 0.1f;
+				if(apo > APO_MIN)
+				{
+					size_t channel_offset = channel_count * sample_count * t + sample_count * e;
+					float total_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, focal_distance_sign);
+					float scan_index = total_distance * samples_per_meter + delay_samples;
+					scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
 
-				// This acts as the final decoding step for the data within the readi group
-				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-				value = SCALE_F2(value, hadamard_value);
+					value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
-				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_F2(value);
+					
+					value = SCALE_F2(value, apo);
+
+					// This acts as the final decoding step for the data within the readi group
+					// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
+					value = SCALE_F2(value, hadamard_value);
+
+					total = ADD_V2(total, value);
+					incoherent_sum += NORM_SQUARE_F2(value);
+				}
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
