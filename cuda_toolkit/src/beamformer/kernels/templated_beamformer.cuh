@@ -119,7 +119,7 @@ namespace bf_kernels
 	
 	/* Each dim in thread and block ID corresponds with a voxel dim for now */
     template<SequenceId SEQ, FocalDirection DIR> requires SupportedDASSequence<SEQ> __global__ void
-    das_beamform(const cuComplex* rf_data, cuComplex* volume)
+    das_beamform(const cuComplex* rf_data, cuComplex* volume, u64 hadamard_row = 0)
 	{
 		// TODO: Check if inlining this to the vox_loc calculation drops the register count
 		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
@@ -153,25 +153,31 @@ namespace bf_kernels
 
 		float incoherent_sum = 0.0f;
 		cuComplex total = {0.0f, 0.0f};
-		for (int t = 0; t < Beamformer_Constants.tx_count; t++)
+		for (int t_position = 0; t_position < Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count; t_position++)
 		{
+			int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
+			int t_signal = t_position % Beamformer_Constants.tx_count;
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
 				static constexpr float APO_MIN = 0.1f;
-				float3 rx_vec = calc_rx_vector<SEQ>(initial_rx, c, t, Beamformer_Constants.pitches);
+				float3 rx_vec = calc_rx_vector<SEQ>(initial_rx, c, t_position, Beamformer_Constants.pitches);
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 
 				if(apo > APO_MIN)
 				{
-					float3 tx_vec = calc_tx_vector<SEQ>(initial_tx, t, Beamformer_Constants.pitches);
+					float3 tx_vec = calc_tx_vector<SEQ>(initial_tx, t_position, Beamformer_Constants.pitches);
 
 					float scan_index = calc_total_distance(tx_vec, rx_vec, focal_point.z) 
 									   * Beamformer_Constants.samples_per_meter 
 									   + Beamformer_Constants.delay_samples;
 
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
-					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t + Beamformer_Constants.sample_count * c;
+					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
+					
 					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);
+					
+					float hadamard_sign = 1.0f - 2.0f * float((hadamard_row >> readi_sub_signal) & 1u);
+					value = SCALE_F2(value, hadamard_sign);
 					value = SCALE_F2(value, apo);
 					total = ADD_V2(total, value);
 					incoherent_sum += NORM_SQUARE_F2(value);
@@ -179,14 +185,13 @@ namespace bf_kernels
 			}
 		}
 
-		float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
-		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
-		coherency_factor = utils::clear_nan(coherency_factor);
-
-		total = SCALE_F2(total, coherency_factor);
-
 		if(COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
 		{
+			float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+			coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+			coherency_factor = utils::clear_nan(coherency_factor);
+			total = SCALE_F2(total, coherency_factor);
+
 			size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
 			volume[volume_offset] = total;
 		}
