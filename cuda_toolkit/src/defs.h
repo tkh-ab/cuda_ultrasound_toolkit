@@ -74,7 +74,9 @@ typedef ptrdiff_t iptr;
 #define ADD_V3(v,u) {(v).x + (u).x, (v).y + (u).y, (v).z + (u).z}
 #define SUB_V3(v,u) {(v).x - (u).x, (v).y - (u).y, (v).z - (u).z}
 
-#define UINT_CEIL(a, b) (((a) + (b) - 1) / (b))
+#define COMPARE_LT_V3(v,u) ((v).x < (u).x && (v).y < (u).y && (v).z < (u).z)
+
+#define UINT_DIV_CEIL(n, d) (((n) + (d) - 1) / (d))
 
 #define CLAMP(x, lower, upper) ( min( max((x), (lower)), (upper) ) )
 

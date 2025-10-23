@@ -2,6 +2,7 @@
 
 #include "../rf_processing/hadamard/hadamard_decoder.h"
 #include "kernels/beamformer_kernels.cuh"
+#include "kernels/templated_beamformer.cuh"
 #include "beamformer.h"
 
 bool
@@ -121,42 +122,57 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 		return false;
 	}
 
-	if (!bf_kernels::copy_kernel_constants(_constants))
-	{
-		std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
-		return false;
-	}
 	bool result = false;
+	bool TEST = true;
 
-	if(bp.das_shader_id == SequenceId::UFORCES)
+	if(TEST)
 	{
-		if(bp.sparse_elements[0] == -1)
+		if (!bf_kernels::copy_kernel_constants1(_constants))
 		{
-			std::cerr << "Beamformer: UFORCES requires sparse elements to be defined." << std::endl;	
+			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
 			return false;
 		}
 
-		short* d_uforces_elements = nullptr;
-		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_uforces_elements, sizeof(short) * bp.dec_data_dim[2]));
-		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)d_uforces_elements, bp.sparse_elements, sizeof(short) * bp.dec_data_dim[2], cudaMemcpyHostToDevice));
-
-		std::cout << "UFORCES beamforming." << std::endl;
-		result = _uforces_beamform(d_input, d_output, d_uforces_elements);
-		CUDA_NULL_FREE(d_uforces_elements);
-	}
-	else if (bp.das_shader_id == SequenceId::FORCES)
-	{
-		result = _readi_forces_beamform(d_input, d_output);
-	}
-	else if (bp.das_shader_id == SequenceId::HERCULES)
-	{
-		result = _readi_hercules_beamform(d_input, d_output);
+		result = _test_generic_beamform(d_input, d_output);
 	}
 	else
 	{
-		std::cerr << "Beamformer: Unsupported sequence ID " << static_cast<int>(bp.das_shader_id) << std::endl;
-		throw std::runtime_error("Unsupported sequence ID.");
-		return false;
+		if (!bf_kernels::copy_kernel_constants(_constants))
+		{
+			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
+			return false;
+		}
+
+		if(bp.das_shader_id == SequenceId::UFORCES)
+		{
+			if(bp.sparse_elements[0] == -1)
+			{
+				std::cerr << "Beamformer: UFORCES requires sparse elements to be defined." << std::endl;	
+				return false;
+			}
+
+			short* d_uforces_elements = nullptr;
+			CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_uforces_elements, sizeof(short) * bp.dec_data_dim[2]));
+			CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)d_uforces_elements, bp.sparse_elements, sizeof(short) * bp.dec_data_dim[2], cudaMemcpyHostToDevice));
+
+			std::cout << "UFORCES beamforming." << std::endl;
+			result = _uforces_beamform(d_input, d_output, d_uforces_elements);
+			CUDA_NULL_FREE(d_uforces_elements);
+		}
+		else if (bp.das_shader_id == SequenceId::FORCES)
+		{
+			result = _readi_forces_beamform(d_input, d_output);
+		}
+		else if (bp.das_shader_id == SequenceId::HERCULES)
+		{
+			result = _readi_hercules_beamform(d_input, d_output);
+		}
+		else
+		{
+			std::cerr << "Beamformer: Unsupported sequence ID " << static_cast<int>(bp.das_shader_id) << std::endl;
+			throw std::runtime_error("Unsupported sequence ID.");
+			return false;
+		}
 	}
 
 	return result;
@@ -275,4 +291,54 @@ Beamformer::_uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const
 
 
     return true;
+}
+
+bool
+Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
+{
+	std::cout << "Starting generic beamform." << std::endl;
+	uint3 vox_counts = _constants.voxel_dims;
+	static constexpr dim3 test_block_dims = {16,1,16};
+	dim3 block_dims = test_block_dims;
+	dim3 grid_dims = { UINT_DIV_CEIL(vox_counts.x, block_dims.x),
+					   UINT_DIV_CEIL(vox_counts.y, block_dims.y),
+					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
+	auto start = std::chrono::high_resolution_clock::now();
+
+	switch(_constants.sequence)
+	{
+		case FORCES:
+			bf_kernels::das_beamform<SequenceId::FORCES, bf_kernels::FocalDirection::XZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+		break;
+		case HERCULES:
+
+			switch(_constants.focal_direction)
+			{
+				case bf_kernels::FocalDirection::PLANE:
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+					break;
+				case bf_kernels::FocalDirection::YZ_PLANE:
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::YZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+					break;
+				default:
+					std::cerr << "Invalid focus for HERCULES." << std::endl;
+					return false;
+			}
+
+		break;
+		default:
+			std::cerr << "Invalid sequence for generic beamformer." << std::endl;
+			return false;
+	};
+
+
+	CUDA_RETURN_IF_ERROR(cudaGetLastError());
+    CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
+
+
+	return true;
 }

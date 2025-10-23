@@ -167,7 +167,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <SplitCompile>Default</SplitCompile>
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
-      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
+      <InterleaveSourceInPTX>false</InterleaveSourceInPTX>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -217,7 +217,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <SplitCompile>MaxThreads</SplitCompile>
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
-      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
+      <InterleaveSourceInPTX>false</InterleaveSourceInPTX>
     </CudaCompile>
     <CudaLink>
       <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
@@ -245,6 +245,7 @@ IF %ERRORLEVEL% LEQ 1 (
     <ClInclude Include="src\beamformer\beamformer_constants.cuh" />
     <ClInclude Include="src\beamformer\beamformer_utils.cuh" />
     <ClInclude Include="src\beamformer\kernels\beamformer_kernels.cuh" />
+    <ClInclude Include="src\beamformer\kernels\templated_beamformer.cuh" />
     <ClInclude Include="src\image_processing\kernels\block_match.h" />
     <ClInclude Include="src\image_processing\kernels\block_match_kernels.cuh" />
     <ClInclude Include="src\public\cuda_beamformer_parameters.h" />
