@@ -157,11 +157,11 @@ namespace bf_kernels
 		{
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
-				static constexpr float APO_MIN = 0.0f;
+				static constexpr float APO_MIN = 0.1f;
 				float3 rx_vec = calc_rx_vector<SEQ>(initial_rx, c, t, Beamformer_Constants.pitches);
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 
-				if(true)
+				if(apo > APO_MIN)
 				{
 					float3 tx_vec = calc_tx_vector<SEQ>(initial_tx, t, Beamformer_Constants.pitches);
 
@@ -182,6 +182,8 @@ namespace bf_kernels
 		float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
 		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 		coherency_factor = utils::clear_nan(coherency_factor);
+
+		total = SCALE_F2(total, coherency_factor);
 
 		if(COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
 		{
