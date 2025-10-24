@@ -296,6 +296,26 @@ Beamformer::_uforces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const
 bool
 Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 {
+
+	u64 compact_hadamard_row = 0;
+    if(_constants.readi_group_count > 1)
+    {
+		uint* hadamard_row = (uint*) malloc(_constants.readi_group_count * sizeof(uint));
+
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)hadamard_row, (void*)(_d_beamformer_hadamard + (_constants.readi_group_id * _constants.readi_group_count)), _constants.readi_group_count * sizeof(uint), cudaMemcpyDeviceToHost));
+
+		// For READI decoding we need the hadamard row corresponding with the current group
+		// Packing it up like this lets every thread hold it locally in registers.
+        //d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
+		for(int i = 0; i < _constants.readi_group_count; i++)
+		{
+
+			compact_hadamard_row |= (hadamard_row[i] >> 31) << i;
+		}
+
+		free(hadamard_row);
+    }
+
 	std::cout << "Starting generic beamform." << std::endl;
 	uint3 vox_counts = _constants.voxel_dims;
 	static constexpr dim3 test_block_dims = {16,1,16};
@@ -309,7 +329,7 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 	switch(_constants.sequence)
 	{
 		case FORCES:
-			bf_kernels::das_beamform<SequenceId::FORCES, bf_kernels::FocalDirection::XZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+			bf_kernels::das_beamform<SequenceId::FORCES, bf_kernels::FocalDirection::XZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 		break;
 		case HERCULES:
 
@@ -317,10 +337,10 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 			{
 				case bf_kernels::FocalDirection::PLANE:
                    // grid_dims.y = 1;
-					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 					break;
 				case bf_kernels::FocalDirection::YZ_PLANE:
-					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::YZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::YZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 					break;
 				default:
 					std::cerr << "Invalid focus for HERCULES." << std::endl;
