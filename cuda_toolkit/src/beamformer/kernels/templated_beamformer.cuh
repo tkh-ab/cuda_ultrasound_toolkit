@@ -203,6 +203,98 @@ namespace bf_kernels
 		
 	}
 
+
+	// Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
+	template<FocalDirection DIR> __global__ void
+	hercules_beamform_new(const cuComplex* rf_data, cuComplex* volume, u64 hadamard_row = 0)
+	{
+		// TODO: Check if inlining this to the vox_loc calculation drops the register count
+		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
+							threadIdx.y + blockIdx.y * blockDim.y,
+							threadIdx.z + blockIdx.z * blockDim.z };
+
+		const float3 vox_loc = {
+			Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
+			Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
+			Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
+		};
+
+		if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
+		{
+			return;
+		}
+		float3 focal_point = { 0.0f, 0.0f, Beamformer_Constants.focal_point.z };
+
+		float3 initial_tx = initial_tx_vec<HERCULES, DIR>(Beamformer_Constants.xdc_mins,
+													 Beamformer_Constants.pitches,
+													 vox_loc,
+													 focal_point);
+
+		float3 initial_rx = initial_rx_vec<HERCULES>(Beamformer_Constants.xdc_mins,
+											   Beamformer_Constants.pitches,
+											   vox_loc);
+
+
+		float tx_distance = copysignf(NORM_F3(initial_tx), initial_tx.z);
+		float3 rx_vec = initial_rx;
+		float incoherent_sum = 0.0f;
+		cuComplex total = {0.0f, 0.0f};
+		size_t channel_offset = 0;
+		for (int t_position = 0; t_position < Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count; t_position++)
+		{
+			int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
+			int t_signal = t_position % Beamformer_Constants.tx_count;
+			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
+			{
+				static constexpr float APO_MIN = 0.1f;
+				//float3 rx_vec = calc_rx_vector<HERCULES>(initial_rx, c, t_position, Beamformer_Constants.pitches);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+
+				if(apo > APO_MIN)
+				{
+					float scan_index = (tx_distance + NORM_F3(rx_vec) + Beamformer_Constants.focal_point.z)
+									   * Beamformer_Constants.samples_per_meter
+									   + Beamformer_Constants.delay_samples;
+
+					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
+					//size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
+					
+					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);					
+
+					// TODO: Compare performance of this vs multiplication
+					// The compiler should make this a predicate op with no branching, confirm this
+					//float hadamard_sign = ((hadamard_row >> readi_sub_signal) & 1u) ? -1.0f : 1.0f;
+					//apo *= hadamard_sign;
+
+					// If the hadamard bit is 1 we need to flip the sign of this sample.
+					// XOR the bit with the sign bit of the apodization --> Avoid multiplication
+					uint hadamard_bit = (hadamard_row >> readi_sub_signal) & 1u;
+					apo = __uint_as_float(__float_as_uint(apo) ^ (hadamard_bit << 31));
+
+					value = SCALE_F2(value, apo);
+					total = ADD_V2(total, value);
+					incoherent_sum += NORM_SQUARE_F2(value);
+				}
+
+				rx_vec.x += Beamformer_Constants.pitches.x;
+				channel_offset += Beamformer_Constants.sample_count;
+			}
+			rx_vec.x = initial_rx.x;
+			rx_vec.y += Beamformer_Constants.pitches.y;
+		}
+
+		if(true)
+		{
+			float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+			coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+			coherency_factor = utils::clear_nan(coherency_factor);
+			total = SCALE_F2(total, coherency_factor);
+
+			size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+			volume[volume_offset] = total;
+		}
+	}
+
 }
 
 

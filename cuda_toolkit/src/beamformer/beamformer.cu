@@ -123,12 +123,13 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	}
 
 	bool result = false;
-	bool TEST = true;
+	bool TEST_generic = false;
+	bool TEST_channel = true;
 
-	if(TEST)
+	if(TEST_generic)
 	{
         std::cout << "Starting templated beamform." << std::endl;
-        TEST = false;
+        TEST_generic = false;
 		if (!bf_kernels::copy_kernel_constants1(_constants))
 		{
 			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
@@ -137,10 +138,20 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 
 		result = _test_generic_beamform(d_input, d_output);
 	}
+	else if (TEST_channel)
+	{
+		std::cout << "Starting channel beamform." << std::endl;
+		if (!bf_kernels::copy_kernel_constants1(_constants))
+		{
+			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
+			return false;
+		}
+
+		result = _test_new_herc_beamform(d_input, d_output);
+	}
 	else
 	{
         std::cout << "Starting standard beamform." << std::endl;
-        TEST = true;
 		if (!bf_kernels::copy_kernel_constants(_constants))
 		{
 			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
@@ -360,6 +371,34 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 
 	CUDA_RETURN_IF_ERROR(cudaGetLastError());
     CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
+
+
+	return true;
+}
+
+
+bool
+Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
+{
+
+	std::cout << "Starting channel beamform." << std::endl;
+	uint3 vox_counts = _constants.voxel_dims;
+	static constexpr dim3 test_block_dims = {8,1,32};
+	dim3 block_dims = test_block_dims;
+	dim3 grid_dims = { UINT_DIV_CEIL(vox_counts.x, block_dims.x),
+					   UINT_DIV_CEIL(vox_counts.y, block_dims.y),
+					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
+	auto start = std::chrono::high_resolution_clock::now();
+
+
+	bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+	CUDA_RETURN_IF_ERROR(cudaGetLastError());
+	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+	
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
