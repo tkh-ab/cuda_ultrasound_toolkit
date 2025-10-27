@@ -75,19 +75,16 @@ namespace bf_kernels
 	{
 		if constexpr (SEQ == SequenceId::FORCES)
 		{
-			// tx vector is voxel_loc - focus so as we move left to right on the array
-			// we need to subtract the pitch
-			float x_offset = transmit_idx * pitches.x;
-			return make_float3(initial_vec.x - x_offset, 0.0f, initial_vec.z);
+			// tx vector is voxel_loc - focus so as we move left to right on the array we need to subtract the pitch
+			initial_vec.x -= transmit_idx * pitches.x;
 		}
 		else if constexpr (SEQ == SequenceId::HERCULES)
-		{
-			return initial_vec;
-		}
+		{}
 		else
 		{
 			static_assert(false, "Unsupported sequence for DAS beamforming");
 		}
+		return initial_vec;
 	}
 	
 	template<SequenceId SEQ> __device__ inline float3
@@ -95,26 +92,26 @@ namespace bf_kernels
 	{
 		if constexpr (SEQ == SequenceId::FORCES)
 		{
-			float x_offset = channel_idx * pitches.x;
-			return make_float3(initial_vec.x + x_offset, initial_vec.y, initial_vec.z);
+			initial_vec.x += channel_idx * pitches.x;
 		}
 		else if constexpr (SEQ == SequenceId::HERCULES)
 		{
-			float x_offset = channel_idx * pitches.x;
-			float y_offset = transmit_idx * pitches.y;
-			return make_float3(initial_vec.x + x_offset, initial_vec.y + y_offset, initial_vec.z);
+			initial_vec.x += channel_idx * pitches.x;
+			initial_vec.y += transmit_idx * pitches.y;
 		}
 		else
 		{
 			static_assert(false, "Unsupported sequence for DAS beamforming");
 		}
+		return initial_vec;
 	}
 
 	__device__ inline float calc_total_distance(float3 tx_vec, float3 rx_vec, float focal_depth)
 	{
 		// Tx vec is from the focus -> the voxel.
 		// If its z value is negative then we are between the transducer and the focus.
-		return focal_depth + NORM_F3(rx_vec) + NORM_F3(tx_vec) * copysignf(1.0f, tx_vec.z);
+		return focal_depth + NORM_F3(rx_vec) + copysignf(NORM_F3(tx_vec), tx_vec.z);
+		//return focal_depth + NORM_F3(rx_vec) + NORM_F3(tx_vec) * copysignf(1.0f, tx_vec.z);
 	}
 	
 	/* Each dim in thread and block ID corresponds with a voxel dim for now */
@@ -174,10 +171,18 @@ namespace bf_kernels
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
-					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);
-					
-					float hadamard_sign = 1.0f - 2.0f * float((hadamard_row >> readi_sub_signal) & 1u);
-					value = SCALE_F2(value, hadamard_sign);
+					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);					
+
+					// TODO: Compare performance of this vs multiplication
+					// The compiler should make this a predicate op with no branching, confirm this
+					//float hadamard_sign = ((hadamard_row >> readi_sub_signal) & 1u) ? -1.0f : 1.0f;
+					//apo *= hadamard_sign;
+
+					// If the hadamard bit is 1 we need to flip the sign of this sample.
+					// XOR the bit with the sign bit of the apodization --> Avoid multiplication
+					uint hadamard_bit = (hadamard_row >> readi_sub_signal) & 1u;
+					apo = __uint_as_float(__float_as_uint(apo) ^ (hadamard_bit << 31));
+
 					value = SCALE_F2(value, apo);
 					total = ADD_V2(total, value);
 					incoherent_sum += NORM_SQUARE_F2(value);
