@@ -127,6 +127,8 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 
 	if(TEST)
 	{
+        std::cout << "Starting templated beamform." << std::endl;
+        TEST = false;
 		if (!bf_kernels::copy_kernel_constants1(_constants))
 		{
 			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
@@ -137,6 +139,8 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	}
 	else
 	{
+        std::cout << "Starting standard beamform." << std::endl;
+        TEST = true;
 		if (!bf_kernels::copy_kernel_constants(_constants))
 		{
 			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
@@ -243,7 +247,7 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
     }
     else
     {
-		bool test = true;
+		bool test = false;
 		if (!test)
 		{
         	bf_kernels::hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
