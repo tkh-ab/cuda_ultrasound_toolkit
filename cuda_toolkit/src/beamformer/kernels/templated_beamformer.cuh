@@ -29,19 +29,19 @@ namespace bf_kernels
 		}
 		else if constexpr (SEQ == SequenceId::HERCULES)
 		{
-			if constexpr (DIR == FocalDirection::PLANE)
+			if constexpr (DIR == FocalDirection::PLANE_FOCUS)
 			{
 				return make_float3(0.0f, 0.0f, vox_loc.z);
 			}
-			else if constexpr (DIR == FocalDirection::XZ_PLANE)
+			else if constexpr (DIR == FocalDirection::XZ_FOCUS)
 			{
 				return make_float3(vox_loc.x - focal_point.x, 0.0f, vox_loc.z - focal_point.z);
 			}
-			else if constexpr (DIR == FocalDirection::YZ_PLANE)
+			else if constexpr (DIR == FocalDirection::YZ_FOCUS)
 			{
 				return make_float3(0.0f, vox_loc.y - focal_point.y, vox_loc.z - focal_point.z);
 			}
-			else if constexpr (DIR == FocalDirection::SPHERE)
+			else if constexpr (DIR == FocalDirection::SPHERE_FOCUS)
 			{
 				static_assert(false, "Spherical focusing not supported for HERCULES");
 			}
@@ -104,6 +104,30 @@ namespace bf_kernels
 			static_assert(false, "Unsupported sequence for DAS beamforming");
 		}
 		return initial_vec;
+	}
+
+	template<EncodingMatrix MAT> __device__ __forceinline__ void 
+	tx_signal_and_decode_bit(int t_position, u64 decode_row, int* t_signal, uint* decode_bit)
+	{
+		if constexpr (MAT == EncodingMatrix::HADAMARD)
+		{
+			int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
+			*t_signal = t_position % Beamformer_Constants.tx_count;
+			*decode_bit = (decode_row >> readi_sub_signal) & 1u;
+		}
+		else if constexpr (MAT == EncodingMatrix::WALSH)
+		{
+			*t_signal = t_position / Beamformer_Constants.readi_group_count;
+			int readi_sub_signal = t_position % Beamformer_Constants.readi_group_count;
+
+			// Todo, make not terrible
+			int test = (*t_signal % 2 == 0) ? readi_sub_signal : (Beamformer_Constants.readi_group_count - 1 - readi_sub_signal);
+			*decode_bit = (decode_row >> test) & 1u;
+		}
+		else
+		{
+			*t_signal = t_position;
+		}
 	}
 
 	__device__ inline float calc_total_distance(float3 tx_vec, float3 rx_vec, float focal_depth)
@@ -185,14 +209,14 @@ namespace bf_kernels
 
 					value = SCALE_F2(value, apo);
 					total = ADD_V2(total, value);
-					incoherent_sum += NORM_SQUARE_F2(value);
+					incoherent_sum += NORM_SQUARE_V2(value);
 				}
 			}
 		}
 
 		if(COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
 		{
-			float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+			float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;
 			coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 			coherency_factor = utils::clear_nan(coherency_factor);
 			total = SCALE_F2(total, coherency_factor);
@@ -203,9 +227,7 @@ namespace bf_kernels
 		
 	}
 
-
-	// Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
-	template<FocalDirection DIR, EncodeMatrix READI> __global__ void
+	template<FocalDirection DIR, EncodingMatrix READI> __global__ void
 	hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
 	{
 		// TODO: Check if inlining this to the vox_loc calculation drops the register count
@@ -225,17 +247,16 @@ namespace bf_kernels
 		}
 		float3 focal_point = { 0.0f, 0.0f, Beamformer_Constants.focal_point.z };
 
-		float3 initial_tx = initial_tx_vec<HERCULES, DIR>(Beamformer_Constants.xdc_mins,
+		float3 tx_vec = initial_tx_vec<HERCULES, DIR>(Beamformer_Constants.xdc_mins,
 													 Beamformer_Constants.pitches,
 													 vox_loc,
 													 focal_point);
 
-		float3 initial_rx = initial_rx_vec<HERCULES>(Beamformer_Constants.xdc_mins,
+		float3 rx_vec = initial_rx_vec<HERCULES>(Beamformer_Constants.xdc_mins,
 											   Beamformer_Constants.pitches,
 											   vox_loc);
-							   
-		float tx_distance = copysignf(NORM_F3(initial_tx), initial_tx.z);
-		float3 rx_vec = initial_rx;
+
+		float tx_distance = copysignf(NORM_F3(tx_vec), tx_vec.z);
 		float incoherent_sum = 0.0f;
 		cuComplex total = {0.0f, 0.0f};
 		int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
@@ -244,25 +265,8 @@ namespace bf_kernels
 		
 		for (int t_position = 0; t_position < total_transmits; t_position++)
 		{
-			if constexpr (READI == EncodeMatrix::HADAMARD)
-			{
-				int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
-				t_signal = t_position % Beamformer_Constants.tx_count;
-				decode_bit = (decode_row >> readi_sub_signal) & 1u;
-			}
-			else if constexpr (READI == EncodeMatrix::WALSH)
-			{
-				t_signal = t_position / Beamformer_Constants.readi_group_count;
-				int readi_sub_signal = t_position % Beamformer_Constants.readi_group_count;
-
-				// Todo, make not terrible
-				int test = (t_signal % 2 == 0) ? readi_sub_signal : (Beamformer_Constants.readi_group_count - 1 - readi_sub_signal);
-				decode_bit = (decode_row >> test) & 1u;
-			}
-			else
-			{
-				t_signal = t_position;
-			}
+			// Abstracts away the READI access pattern. DAS according to position, sample from signal, flip sign according to decode bit.
+			tx_signal_and_decode_bit<READI>(t_position, decode_row, &t_signal, &decode_bit);
 			
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
@@ -281,22 +285,108 @@ namespace bf_kernels
 					//cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
 					 cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
-					if constexpr (READI != EncodeMatrix::NONE)
+					if constexpr (READI != EncodingMatrix::NONE)
 					{
 						apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
 					}
 					
 					value = SCALE_F2(value, apo);
 					total = ADD_V2(total, value);
-					incoherent_sum += NORM_SQUARE_F2(value);
+					incoherent_sum += NORM_SQUARE_V2(value);
 				}
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
-			rx_vec.x = initial_rx.x;
+			rx_vec.x -= Beamformer_Constants.pitches.x * Beamformer_Constants.channel_count;
 			rx_vec.y += Beamformer_Constants.pitches.y;
 		}
-		float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+		float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;
+		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+		coherency_factor = utils::clear_nan(coherency_factor);
+		total = SCALE_F2(total, coherency_factor);
+
+		size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+		volume[volume_offset] = total;
+	}
+
+	// Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
+	template<EncodingMatrix READI> __global__ void
+	forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
+	{
+		// TODO: Check if inlining this to the vox_loc calculation drops the register count
+		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
+							threadIdx.y + blockIdx.y * blockDim.y,
+							threadIdx.z + blockIdx.z * blockDim.z };
+
+		const float3 vox_loc = {
+			Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
+			Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
+			Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
+		};
+
+		if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
+		{
+			return;
+		}
+
+		float3 tx_vec = initial_tx_vec<FORCES, FocalDirection::XZ_FOCUS>(Beamformer_Constants.xdc_mins,
+													 Beamformer_Constants.pitches,
+													 vox_loc, {0.0f, 0.0f, 0.0f});
+
+		float3 rx_vec = initial_rx_vec<FORCES>(Beamformer_Constants.xdc_mins,
+											   Beamformer_Constants.pitches,
+											   vox_loc);
+							   
+		float incoherent_sum = 0.0f;
+		cuComplex total = {0.0f, 0.0f};
+		int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
+		int t_signal = 0;
+		uint decode_bit = 0;
+		int t_position = 0;
+		for (int c = 0; c < Beamformer_Constants.channel_count; c++)
+		{
+			static constexpr float APO_MIN = 0.1f;
+			float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+			if(apo > APO_MIN)
+			{
+				for (t_position = 0; t_position < total_transmits; t_position++)
+				{
+					// Abstracts away the READI access pattern. DAS according to position, sample from signal, flip sign according to decode bit.
+					tx_signal_and_decode_bit<READI>(t_position, decode_row, &t_signal, &decode_bit);
+			
+					float scan_index = (NORM_F3(tx_vec) + NORM_F3(rx_vec))
+										* Beamformer_Constants.samples_per_meter
+										+ Beamformer_Constants.delay_samples;
+
+					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
+					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
+					
+					cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+					//cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+
+					float signed_apo;
+					if constexpr (READI != EncodingMatrix::NONE)
+					{
+						// Set the sign of the apo to the hadamard coefficient -> inverts the sample if needed
+						signed_apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
+					}
+					else
+					{
+						signed_apo = apo;
+					}
+					
+					value = SCALE_F2(value, signed_apo);
+					total = ADD_V2(total, value);
+					incoherent_sum += NORM_SQUARE_V2(value);
+
+					tx_vec.x -= Beamformer_Constants.pitches.x;
+				}
+				tx_vec.x += Beamformer_Constants.pitches.x * total_transmits;
+			}
+			rx_vec.x += Beamformer_Constants.pitches.x;
+		}
+
+		float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;
 		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 		coherency_factor = utils::clear_nan(coherency_factor);
 		total = SCALE_F2(total, coherency_factor);

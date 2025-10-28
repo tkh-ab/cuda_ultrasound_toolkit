@@ -12,10 +12,10 @@ namespace bf_kernels
 {
     enum class FocalDirection
     {
-        PLANE = 0,
-        XZ_PLANE = 1,
-        YZ_PLANE = 2,
-        SPHERE = 3,
+        PLANE_FOCUS = 0,
+        XZ_FOCUS = 1,
+        YZ_FOCUS = 2,
+        SPHERE_FOCUS = 3,
     };  
     struct BeamformerConstants
     {
@@ -45,7 +45,7 @@ namespace bf_kernels
 
         u8 readi_group_count;
         u8 readi_group_id;
-        EncodeMatrix encoded_matrix;
+        EncodingMatrix encoded_matrix;
     };
 
 	__host__ bool copy_kernel_constants1(const BeamformerConstants& constants);

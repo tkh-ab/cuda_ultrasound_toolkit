@@ -10,11 +10,11 @@ namespace bf_kernels::utils
     {
 		// TODO, these are backwards, update but make sure nothing regresses
         float3 tx_distance;
-        if (direction == FocalDirection::XZ_PLANE)
+        if (direction == FocalDirection::XZ_FOCUS)
         {
             tx_distance = { source_pos.x - vox_loc.x, 0.0f, source_pos.z - vox_loc.z};
         }
-        else if (direction == FocalDirection::YZ_PLANE)
+        else if (direction == FocalDirection::YZ_FOCUS)
         {
             tx_distance = { 0.0f, source_pos.y - vox_loc.y, source_pos.z - vox_loc.z };
         }

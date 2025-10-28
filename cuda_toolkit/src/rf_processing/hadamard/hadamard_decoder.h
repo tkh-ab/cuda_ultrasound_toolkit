@@ -11,7 +11,7 @@ namespace decoding
     class HadamardDecoder
     {
     public:
-        HadamardDecoder() : _d_hadamard(nullptr), _hadamard_size(0), _readi_ordering(EncodeMatrix::HADAMARD) {};
+        HadamardDecoder() : _d_hadamard(nullptr), _hadamard_size(0), _readi_ordering(EncodingMatrix::HADAMARD) {};
         ~HadamardDecoder() 
         { 
             _cleanup_hadamard(); 
@@ -26,9 +26,9 @@ namespace decoding
         HadamardDecoder& operator=(HadamardDecoder&&) = delete;
 
         bool decode(float* d_input, float* d_output, uint3 decoded_dims);
-        static bool generate_hadamard(float* d_hadamard, uint row_count, EncodeMatrix readi_ordering = EncodeMatrix::HADAMARD);
+        static bool generate_hadamard(float* d_hadamard, uint row_count, EncodingMatrix readi_ordering = EncodingMatrix::HADAMARD);
 
-        bool set_hadamard(uint row_count, EncodeMatrix readi_ordering = EncodeMatrix::HADAMARD);
+        bool set_hadamard(uint row_count, EncodingMatrix readi_ordering = EncodingMatrix::HADAMARD);
 
         const float* get_hadamard() const { return _d_hadamard; }
 
@@ -54,7 +54,7 @@ namespace decoding
         static void _sort_walsh(float* hadamard, uint row_count);
 
 
-        EncodeMatrix _readi_ordering;
+        EncodingMatrix _readi_ordering;
         float* _d_hadamard;
         uint _hadamard_size = 0;
 
