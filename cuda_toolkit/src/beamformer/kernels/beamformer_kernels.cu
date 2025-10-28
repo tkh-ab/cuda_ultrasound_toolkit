@@ -59,7 +59,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				float scan_index = total_distance * samples_per_meter + delay_samples;
 				scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
 
-				value = utils::cubic_spline(channel_offset, scan_index, rfData);
+				value = utils::lerp_read(scan_index, rfData + channel_offset);
 
 				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
 				value = SCALE_F2(value, apo);
