@@ -133,7 +133,7 @@ cuda_toolkit::beamform(std::span<const uint8_t> input_data,
 
     std::span<const i16> channel_mapping(bp.channel_mapping, dec_data_dim.y);
     std::span<const float> rf_filter(bp.rf_filter, bp.filter_length);
-    if(!rf_processor.init(rf_raw_dim, dec_data_dim, bp.readi_ordering))
+    if(!rf_processor.init(rf_raw_dim, dec_data_dim, bp.decode))
     {
         std::cerr << "Failed to initialize RF processor." << std::endl;
         return false;

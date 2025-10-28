@@ -45,7 +45,7 @@ namespace bf_kernels
 
         u8 readi_group_count;
         u8 readi_group_id;
-        ReadiOrdering readi_order;
+        EncodeMatrix encoded_matrix;
     };
 
 	__host__ bool copy_kernel_constants1(const BeamformerConstants& constants);

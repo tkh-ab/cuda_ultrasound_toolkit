@@ -35,7 +35,7 @@ namespace bf_kernels
     __host__ bool
 	copy_kernel_constants(const BeamformerConstants& constants);
 
-    template<SequenceId SEQUENCE, ReadiOrdering READI_ORDER> __global__ void
+    template<SequenceId SEQUENCE, EncodeMatrix READI_ORDER> __global__ void
     readi_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 	
 	__global__ void

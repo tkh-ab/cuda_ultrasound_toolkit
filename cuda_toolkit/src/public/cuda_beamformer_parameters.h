@@ -53,11 +53,12 @@ typedef enum InputDataTypes
 } InputDataTypes;
 
 
-typedef enum ReadiOrdering
+typedef enum EncodeMatrix
 {
-    HADAMARD = 0,
-    WALSH = 1,
-} ReadiOrdering;
+	NONE = 0,
+    HADAMARD = 1,
+    WALSH = 2,
+} EncodeMatrix;
 
 typedef struct NccMotionParameters
 {
@@ -86,7 +87,7 @@ typedef struct CudaBeamformerParameters
 	uint rf_raw_dim[4];		// Raw Data Dimensions [samples * transmits + padding, total_channels (rows + cols)]
 	uint dec_data_dim[4];	// Expected dimensions after decoding [samples, rx_channels, transmits]; last element ignored
 
-	bool decode;					// Decode or just reshape data
+	EncodeMatrix decode;		    // Decode or just reshape data
 	TxRxDirection transmit_mode;	// TX and RX directions
 	SequenceId das_shader_id;		// Sequence type
 	float time_offset;				// pulse length correction time [s]
@@ -122,7 +123,6 @@ typedef struct CudaBeamformerParameters
 	*/
 	uint readi_group_count;	// Number of READI groups in the scheme
 	uint readi_group_id;	// Which READI group this represents
-	ReadiOrdering readi_ordering;	// Ordering of the READI groups
 
 	uint mixes_count;		// Number of mixes crosses
 	uint mixes_offset;		// Cross offset at the center of the array
