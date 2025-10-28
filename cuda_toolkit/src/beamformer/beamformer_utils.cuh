@@ -119,12 +119,20 @@ namespace bf_kernels::utils
 		return { rx, ry };
     }
 
-	// __device__ inline cuComplex 
-    // lerp_read(int channel_offset, float x, const cuComplex* rf_data)
-    // {
-	// 	int x_whole = static_cast<int>(floorf(x));
-    //     float xr = x - static_cast<float>(x_whole);
-	// }
+	__device__ inline cuComplex 
+    lerp_read(float x, const cuComplex* __restrict__ rf_data)
+    {
+		const int i = __float2int_rd(x);
+		const float t  = x - static_cast<float>(i);
+
+		const float2 p0  = reinterpret_cast<const float2&>(rf_data[i + 0]);
+		const float2 p1  = reinterpret_cast<const float2&>(rf_data[i + 1]);
+
+		float rx = (1.0f - t) * p0.x + t * p1.x;
+		float ry = (1.0f - t) * p0.y + t * p1.y;
+
+		return { rx, ry };
+	}
 
     __device__ inline float
     f_num_apodization(float lateral_dist_ratio, float depth, float f_num)
@@ -134,7 +142,10 @@ namespace bf_kernels::utils
         float apo = f_num * (lateral_dist_ratio / depth) /2;
         apo = fminf(apo, 0.5);
         apo = cosf(CUDART_PI_F * apo);
-        return apo * apo; // cos^2
+        apo *= apo;
+
+		//apo = 1 - 4 * apo * apo;
+		return apo;
     }
 
     __device__ __inline__ bool
