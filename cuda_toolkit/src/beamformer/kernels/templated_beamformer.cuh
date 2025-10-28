@@ -206,7 +206,7 @@ namespace bf_kernels
 
 	// Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
 	template<FocalDirection DIR, EncodeMatrix READI> __global__ void
-	hercules_beamform_new(const cuComplex* rf_data, cuComplex* volume, u64 decode_row = 0)
+	hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
 	{
 		// TODO: Check if inlining this to the vox_loc calculation drops the register count
 		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
@@ -279,7 +279,7 @@ namespace bf_kernels
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
-					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);					
+					cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
 					// TODO: Compare performance of these
 					// The compiler should make this a predicate op with no branching, confirm this
@@ -303,17 +303,14 @@ namespace bf_kernels
 			rx_vec.x = initial_rx.x;
 			rx_vec.y += Beamformer_Constants.pitches.y;
 		}
+		float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
+		coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+		coherency_factor = utils::clear_nan(coherency_factor);
+		total = SCALE_F2(total, coherency_factor);
 
-		if(true)
-		{
-			float coherency_factor = NORM_SQUARE_F2(total) / incoherent_sum;
-			coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
-			coherency_factor = utils::clear_nan(coherency_factor);
-			total = SCALE_F2(total, coherency_factor);
-
-			size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
-			volume[volume_offset] = total;
-		}
+		size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+		volume[volume_offset] = total;
+		
 	}
 
 }

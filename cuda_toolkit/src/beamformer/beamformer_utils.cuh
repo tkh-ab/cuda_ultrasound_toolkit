@@ -91,6 +91,41 @@ namespace bf_kernels::utils
         return { result_x, result_y };
     }
 
+	__device__ inline cuComplex 
+    fast_cubic_spline(float x, const cuComplex* __restrict__ rf_data)
+    {
+		static constexpr float C_SPLINE = 0.5f;
+
+        const int i = __float2int_rd(x);
+		const float t  = x - static_cast<float>(i);
+		const float t2 = t * t;
+
+		const float2 pm1 = reinterpret_cast<const float2&>(rf_data[i - 1]);
+		const float2 p0  = reinterpret_cast<const float2&>(rf_data[i + 0]);
+		const float2 p1  = reinterpret_cast<const float2&>(rf_data[i + 1]);
+		const float2 p2  = reinterpret_cast<const float2&>(rf_data[i + 2]);
+
+		const float2 m0 = {C_SPLINE * (p1.x - pm1.x), C_SPLINE * (p1.y - pm1.y)};
+		const float2 m1 = {C_SPLINE * (p2.x - p0.x), C_SPLINE * (p2.y - p0.y)};
+
+		const float h00 = fmaf(fmaf(2.0f, t, -3.0f), t2, 1.0f);
+		const float h10 = fmaf(fmaf(1.0f, t, -2.0f), t2, t);
+		const float h01 = fmaf(-2.0f, t, 3.0f)* t2;
+		const float h11 = fmaf(1.0f, t, -1.0f)* t2;
+
+		float rx = fmaf(h00, p0.x, fmaf(h01, p1.x, fmaf(h10, m0.x, h11 * m1.x)));
+		float ry = fmaf(h00, p0.y, fmaf(h01, p1.y, fmaf(h10, m0.y, h11 * m1.y)));
+
+		return { rx, ry };
+    }
+
+	// __device__ inline cuComplex 
+    // lerp_read(int channel_offset, float x, const cuComplex* rf_data)
+    // {
+	// 	int x_whole = static_cast<int>(floorf(x));
+    //     float xr = x - static_cast<float>(x_whole);
+	// }
+
     __device__ inline float
     f_num_apodization(float lateral_dist_ratio, float depth, float f_num)
     {
