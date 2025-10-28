@@ -50,18 +50,18 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.focal_point = focal_point;
     if(isinf(constants.focal_point.z))
     {
-        constants.focal_direction = bf_kernels::FocalDirection::PLANE;
+        constants.focal_direction = bf_kernels::FocalDirection::PLANE_FOCUS;
         constants.focal_point.z = 0.0f;
     }
     else if(bp.das_shader_id == SequenceId::HERCULES 
         || bp.das_shader_id == SequenceId::UHURCULES
         || bp.das_shader_id == SequenceId::EPIC_UHERCULES)
     {
-        constants.focal_direction = bf_kernels::FocalDirection::YZ_PLANE;
+        constants.focal_direction = bf_kernels::FocalDirection::YZ_FOCUS;
     }
     else
     {
-        constants.focal_direction = bf_kernels::FocalDirection::XZ_PLANE;
+        constants.focal_direction = bf_kernels::FocalDirection::XZ_FOCUS;
     }
 
 	constants.coherency_weighting = min(max(bp.coherency_weighting, 0.0f), 1.0f);
@@ -123,31 +123,17 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	}
 
 	bool result = false;
-	bool TEST_generic = false;
-	bool TEST_channel = false;
+	bool TEST_channel = true;
 
-	if(TEST_generic)
+	if (TEST_channel)
 	{
-        std::cout << "Starting templated beamform." << std::endl;
-        TEST_generic = false;
 		if (!bf_kernels::copy_kernel_constants1(_constants))
-		{
-			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
-			return false;
-		}
-
-		result = _test_generic_beamform(d_input, d_output);
-	}
-	else if (TEST_channel)
-	{
-		std::cout << "Starting channel beamform." << std::endl;
-		if (!bf_kernels::copy_kernel_constants1(_constants))
-		{
-			std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
-			return false;
-		}
-
-		result = _test_new_herc_beamform(d_input, d_output);
+			{
+				std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
+				return false;
+			}
+		result = _test_new_forces_beamform(d_input, d_output);
+		//result = _test_generic_beamform(d_input, d_output);
 	}
 	else
 	{
@@ -217,7 +203,7 @@ Beamformer::_readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    if (_constants.encoded_matrix == EncodeMatrix::WALSH)
+    if (_constants.encoded_matrix == EncodingMatrix::WALSH)
     {
         bf_kernels::walsh_forces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
@@ -257,7 +243,7 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    if (_constants.encoded_matrix == EncodeMatrix::WALSH)
+    if (_constants.encoded_matrix == EncodingMatrix::WALSH)
     {
         bf_kernels::walsh_hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
@@ -350,18 +336,18 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 	switch(_constants.sequence)
 	{
 		case FORCES:
-			bf_kernels::das_beamform<SequenceId::FORCES, bf_kernels::FocalDirection::XZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			bf_kernels::das_beamform<SequenceId::FORCES, bf_kernels::FocalDirection::XZ_FOCUS><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 		break;
 		case HERCULES:
 
 			switch(_constants.focal_direction)
 			{
-				case bf_kernels::FocalDirection::PLANE:
+				case bf_kernels::FocalDirection::PLANE_FOCUS:
                    // grid_dims.y = 1;
-					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::PLANE_FOCUS><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 					break;
-				case bf_kernels::FocalDirection::YZ_PLANE:
-					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::YZ_PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				case bf_kernels::FocalDirection::YZ_FOCUS:
+					bf_kernels::das_beamform<SequenceId::HERCULES, bf_kernels::FocalDirection::YZ_FOCUS><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 					break;
 				default:
 					std::cerr << "Invalid focus for HERCULES." << std::endl;
@@ -391,7 +377,7 @@ bool
 Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 {
 
-	std::cout << "Starting channel beamform." << std::endl;
+	std::cout << "Starting HERCULES beamform." << std::endl;
 	uint3 vox_counts = _constants.voxel_dims;
 	static constexpr dim3 test_block_dims = {8,1,32};
 	dim3 block_dims = test_block_dims;
@@ -401,6 +387,7 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 	auto start = std::chrono::high_resolution_clock::now();
 	u64 compact_hadamard_row = 0;
 
+	// Todo: make a better dispatcher
 	if(_constants.readi_group_count > 1)
 	{
 		uint* hadamard_row = (uint*) malloc(_constants.readi_group_count * sizeof(uint));
@@ -417,18 +404,116 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 		}
 		free(hadamard_row);
 
-		if(_constants.encoded_matrix == EncodeMatrix::WALSH)
+		if(_constants.encoded_matrix == EncodingMatrix::WALSH)
 		{
-			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+			{
+				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			}
+			else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+			{
+				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			}
+			else
+			{
+				std::cerr << "Invalid focus for HERCULES." << std::endl;
+				return false;
+			}
 		}
-		else if (_constants.encoded_matrix == EncodeMatrix::HADAMARD)
+		else if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
 		{
-			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+			{
+				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			}
+			else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+			{
+				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			}
+			else
+			{
+				std::cerr << "Invalid focus for HERCULES." << std::endl;
+				return false;
+			}
 		}
 	}
 	else
 	{
-		bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+		{
+			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		}
+		else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+		{
+			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		}
+		else
+		{
+			std::cerr << "Invalid focus for HERCULES." << std::endl;
+			return false;
+		}
+	}
+	
+	
+	CUDA_RETURN_IF_ERROR(cudaGetLastError());
+	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+	
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
+
+
+	return true;
+}
+
+
+
+bool
+Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
+{
+
+	std::cout << "Starting FORCES beamform." << std::endl;
+	uint3 vox_counts = _constants.voxel_dims;
+	static constexpr dim3 test_block_dims = {8,1,32};
+	dim3 block_dims = test_block_dims;
+	dim3 grid_dims = { UINT_DIV_CEIL(vox_counts.x, block_dims.x),
+					   UINT_DIV_CEIL(vox_counts.y, block_dims.y),
+					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
+	auto start = std::chrono::high_resolution_clock::now();
+	u64 compact_hadamard_row = 0;
+
+	// Todo: make a better dispatcher
+	if(_constants.readi_group_count > 1)
+	{
+		uint* hadamard_row = (uint*) malloc(_constants.readi_group_count * sizeof(uint));
+
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)hadamard_row, 
+		(void*)(_d_beamformer_hadamard + (_constants.readi_group_id * _constants.readi_group_count)),
+		 _constants.readi_group_count * sizeof(uint), cudaMemcpyDeviceToHost));
+		// For READI decoding we need the hadamard row corresponding with the current group
+		// Packing it up like this lets every thread hold it locally in registers.
+        //d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
+		for(int i = 0; i < _constants.readi_group_count; i++)
+		{
+			compact_hadamard_row |= (hadamard_row[i] >> 31) << i;
+		}
+		free(hadamard_row);
+
+		if(_constants.encoded_matrix == EncodingMatrix::WALSH)
+		{
+
+			bf_kernels::forces_beamform_new<EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+	
+		}
+		else if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
+		{
+			bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		}
+	}
+	else
+	{
+		bf_kernels::forces_beamform_new<EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 	}
 	
 	

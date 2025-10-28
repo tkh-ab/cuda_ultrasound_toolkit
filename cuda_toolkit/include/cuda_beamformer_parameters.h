@@ -53,12 +53,12 @@ typedef enum InputDataTypes
 } InputDataTypes;
 
 
-typedef enum EncodeMatrix
+typedef enum EncodingMatrix
 {
 	NONE = 0,
     HADAMARD = 1,
     WALSH = 2,
-} EncodeMatrix;
+} EncodingMatrix;
 
 typedef struct NccMotionParameters
 {
@@ -87,7 +87,7 @@ typedef struct CudaBeamformerParameters
 	uint rf_raw_dim[4];		// Raw Data Dimensions [samples * transmits + padding, total_channels (rows + cols)]
 	uint dec_data_dim[4];	// Expected dimensions after decoding [samples, rx_channels, transmits]; last element ignored
 
-	EncodeMatrix decode;		    // Decode or just reshape data
+	EncodingMatrix decode;		    // Decode or just reshape data
 	TxRxDirection transmit_mode;	// TX and RX directions
 	SequenceId das_shader_id;		// Sequence type
 	float time_offset;				// pulse length correction time [s]

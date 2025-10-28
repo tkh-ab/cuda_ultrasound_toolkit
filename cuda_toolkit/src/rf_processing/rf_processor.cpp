@@ -5,7 +5,7 @@ RfProcessor::RfProcessor() : _init(false),
                             _rf_raw_dim({ 0, 0 }),
                             _dec_data_dim({ 0, 0, 0 }),
                             _decode_buffers({nullptr, nullptr }),
-                            _readi_ordering(EncodeMatrix::HADAMARD)
+                            _readi_ordering(EncodingMatrix::HADAMARD)
 {
     _data_converter = std::make_unique<data_conversion::DataConverter>();
     _hilbert_handler = std::make_unique<rf_fft::HilbertHandler>();
@@ -18,7 +18,7 @@ RfProcessor::RfProcessor() : _init(false),
 }
 
 bool
-RfProcessor::init(uint2 rf_raw_dim, uint3 dec_data_dim, EncodeMatrix readi_ordering)
+RfProcessor::init(uint2 rf_raw_dim, uint3 dec_data_dim, EncodingMatrix readi_ordering)
 {
 
     if (_init && !_dims_changed(rf_raw_dim, dec_data_dim, readi_ordering))

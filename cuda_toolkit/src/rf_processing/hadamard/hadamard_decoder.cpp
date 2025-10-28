@@ -78,7 +78,7 @@ decoding::HadamardDecoder::decode(float* d_input, float* d_output, uint3 decoded
 }
 
 bool 
-decoding::HadamardDecoder::set_hadamard(uint row_count, EncodeMatrix readi_ordering)
+decoding::HadamardDecoder::set_hadamard(uint row_count, EncodingMatrix readi_ordering)
 {
 	if( !_cublas_handle )
 	{
@@ -108,7 +108,7 @@ decoding::HadamardDecoder::set_hadamard(uint row_count, EncodeMatrix readi_order
 }
 
 bool 
-decoding::HadamardDecoder::generate_hadamard(float* d_hadamard, uint row_count, EncodeMatrix readi_ordering)
+decoding::HadamardDecoder::generate_hadamard(float* d_hadamard, uint row_count, EncodingMatrix readi_ordering)
 {
 
     // Create a requested_length x requested_length array on the CPU
@@ -177,7 +177,7 @@ decoding::HadamardDecoder::generate_hadamard(float* d_hadamard, uint row_count, 
 		}
 	}
 
-	if( readi_ordering == EncodeMatrix::WALSH )
+	if( readi_ordering == EncodingMatrix::WALSH )
 	{
 		_sort_walsh(cpu_hadamard, row_count);
 	}

@@ -42,7 +42,6 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 
 	float starting_x = rx_vec.x;
 
-	
 	uint sample_count = Beamformer_Constants.sample_count;
 	uint channel_count = Beamformer_Constants.channel_count;
 	float samples_per_meter = Beamformer_Constants.samples_per_meter;
@@ -69,7 +68,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				value = SCALE_F2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_F2(value);
+				incoherent_sum += NORM_SQUARE_V2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
@@ -79,7 +78,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 		}
 	}
 
-    float coherent_sum = NORM_SQUARE_F2(total);
+    float coherent_sum = NORM_SQUARE_V2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
@@ -152,7 +151,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 			value = SCALE_F2(value, apo);
 
 			total = ADD_V2(total, value);
-			incoherent_sum += NORM_SQUARE_F2(value);
+			incoherent_sum += NORM_SQUARE_V2(value);
 
 			rx_vec.x += Beamformer_Constants.pitches.x;
 		}
@@ -160,7 +159,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 		rx_vec.x = starting_x;
 	}
 
-    float coherent_sum = NORM_SQUARE_F2(total);
+    float coherent_sum = NORM_SQUARE_V2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
@@ -238,7 +237,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 					value = SCALE_F2(value, hadamard_value);
 
 					total = ADD_V2(total, value);
-					incoherent_sum += NORM_SQUARE_F2(value);
+					incoherent_sum += NORM_SQUARE_V2(value);
 				}
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
@@ -249,7 +248,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 		}
 	}
 
-    float coherent_sum = NORM_SQUARE_F2(total);
+    float coherent_sum = NORM_SQUARE_V2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
@@ -330,7 +329,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 				value = SCALE_F2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_F2(value);
+				incoherent_sum += NORM_SQUARE_V2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
@@ -340,7 +339,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 		}
 	}
 
-    float coherent_sum = NORM_SQUARE_F2(total);
+    float coherent_sum = NORM_SQUARE_V2(total);
 
 	float coherency_factor = coherent_sum / incoherent_sum;
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);

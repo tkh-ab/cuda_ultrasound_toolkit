@@ -65,8 +65,8 @@ typedef ptrdiff_t iptr;
 #define NORM_F2(v) (sqrtf( (v).x * (v).x + (v).y * (v).y))
 #define NORM_F3(v) (sqrtf( (v).x * (v).x + (v).y * (v).y + (v).z * (v).z))
 
-#define NORM_SQUARE_F2(v) ((v).x * (v).x + (v).y * (v).y)
-#define NORM_SQUARE_F3(v) ((v).x * (v).x + (v).y * (v).y + (v).z * (v).z)
+#define NORM_SQUARE_V2(v) ((v).x * (v).x + (v).y * (v).y)
+#define NORM_SQUARE_V3(v) ((v).x * (v).x + (v).y * (v).y + (v).z * (v).z)
 
 #define ADD_V2(v,u) {(v).x + (u).x, (v).y + (u).y}
 #define SUB_V2(v,u) {(v).x - (u).x, (v).y - (u).y}
