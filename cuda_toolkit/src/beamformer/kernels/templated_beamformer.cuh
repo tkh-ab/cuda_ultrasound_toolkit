@@ -278,8 +278,8 @@ namespace bf_kernels
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
-					cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
-					// cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+					//cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+					 cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
 					if constexpr (READI != EncodeMatrix::NONE)
 					{
