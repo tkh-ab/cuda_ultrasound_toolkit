@@ -44,7 +44,7 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
         constants.readi_group_count = 1; // If no groups, just use one
     }
     constants.readi_group_id = static_cast<u8>(bp.readi_group_id);
-    constants.readi_order = bp.readi_ordering;
+    constants.encoded_matrix = bp.decode;
 
     float3 focal_point = {0.0f, 0.0f, bp.focal_depths[0]};
     constants.focal_point = focal_point;
@@ -66,11 +66,11 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
 
 	constants.coherency_weighting = min(max(bp.coherency_weighting, 0.0f), 1.0f);
 
-    bool readi_count_changed = (_constants.readi_group_count != bp.readi_group_count ||
-                                _constants.readi_order != bp.readi_ordering);
+    bool readi_matrix_changed = (_constants.readi_group_count != bp.readi_group_count ||
+                                _constants.encoded_matrix != bp.decode);
 
     std::memcpy(&_constants, &constants, sizeof(bf_kernels::BeamformerConstants));
-    return readi_count_changed;
+    return readi_matrix_changed;
 }
 
 bool
@@ -97,7 +97,7 @@ Beamformer::setup_beamformer(const CudaBeamformerParameters& bp)
     else
     {
         if(! decoding::HadamardDecoder::generate_hadamard(
-            _d_beamformer_hadamard, _constants.readi_group_count, _constants.readi_order))
+            _d_beamformer_hadamard, _constants.readi_group_count, _constants.encoded_matrix))
         {
             std::cerr << "Beamformer: Failed to generate Hadamard matrix." << std::endl;
             return false;
@@ -212,7 +212,7 @@ Beamformer::_readi_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    if (_constants.readi_order == ReadiOrdering::WALSH)
+    if (_constants.encoded_matrix == EncodeMatrix::WALSH)
     {
         bf_kernels::walsh_forces_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
@@ -252,7 +252,7 @@ Beamformer::_readi_hercules_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    if (_constants.readi_order == ReadiOrdering::WALSH)
+    if (_constants.encoded_matrix == EncodeMatrix::WALSH)
     {
         bf_kernels::walsh_hercules_beamform << < grid_dim, block_dim >> > (d_rf_buffer, d_volume, d_hadamard_row);
     }
@@ -317,14 +317,15 @@ Beamformer::_test_generic_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
     {
 		uint* hadamard_row = (uint*) malloc(_constants.readi_group_count * sizeof(uint));
 
-		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)hadamard_row, (void*)(_d_beamformer_hadamard + (_constants.readi_group_id * _constants.readi_group_count)), _constants.readi_group_count * sizeof(uint), cudaMemcpyDeviceToHost));
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)hadamard_row, 
+		(void*)(_d_beamformer_hadamard + (_constants.readi_group_id * _constants.readi_group_count)),
+		 _constants.readi_group_count * sizeof(uint), cudaMemcpyDeviceToHost));
 
 		// For READI decoding we need the hadamard row corresponding with the current group
 		// Packing it up like this lets every thread hold it locally in registers.
         //d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
 		for(int i = 0; i < _constants.readi_group_count; i++)
 		{
-
 			compact_hadamard_row |= (hadamard_row[i] >> 31) << i;
 		}
 
@@ -393,9 +394,39 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 					   UINT_DIV_CEIL(vox_counts.y, block_dims.y),
 					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
 	auto start = std::chrono::high_resolution_clock::now();
+	u64 compact_hadamard_row = 0;
 
+	if(_constants.readi_group_count > 1)
+	{
+		uint* hadamard_row = (uint*) malloc(_constants.readi_group_count * sizeof(uint));
 
-	bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume);
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)hadamard_row, 
+		(void*)(_d_beamformer_hadamard + (_constants.readi_group_id * _constants.readi_group_count)),
+		 _constants.readi_group_count * sizeof(uint), cudaMemcpyDeviceToHost));
+		// For READI decoding we need the hadamard row corresponding with the current group
+		// Packing it up like this lets every thread hold it locally in registers.
+        //d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
+		for(int i = 0; i < _constants.readi_group_count; i++)
+		{
+			compact_hadamard_row |= (hadamard_row[i] >> 31) << i;
+		}
+		free(hadamard_row);
+
+		if(_constants.encoded_matrix == EncodeMatrix::WALSH)
+		{
+			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		}
+		else if (_constants.encoded_matrix == EncodeMatrix::HADAMARD)
+		{
+			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		}
+	}
+	else
+	{
+		bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE, EncodeMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+	}
+	
+	
 	CUDA_RETURN_IF_ERROR(cudaGetLastError());
 	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
 	

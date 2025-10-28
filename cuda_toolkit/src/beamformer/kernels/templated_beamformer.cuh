@@ -205,8 +205,8 @@ namespace bf_kernels
 
 
 	// Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
-	template<FocalDirection DIR> __global__ void
-	hercules_beamform_new(const cuComplex* rf_data, cuComplex* volume, u64 hadamard_row = 0)
+	template<FocalDirection DIR, EncodeMatrix READI> __global__ void
+	hercules_beamform_new(const cuComplex* rf_data, cuComplex* volume, u64 decode_row = 0)
 	{
 		// TODO: Check if inlining this to the vox_loc calculation drops the register count
 		uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
@@ -233,17 +233,37 @@ namespace bf_kernels
 		float3 initial_rx = initial_rx_vec<HERCULES>(Beamformer_Constants.xdc_mins,
 											   Beamformer_Constants.pitches,
 											   vox_loc);
-
-
+							   
 		float tx_distance = copysignf(NORM_F3(initial_tx), initial_tx.z);
 		float3 rx_vec = initial_rx;
 		float incoherent_sum = 0.0f;
 		cuComplex total = {0.0f, 0.0f};
-		size_t channel_offset = 0;
-		for (int t_position = 0; t_position < Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count; t_position++)
+		int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
+		int t_signal = 0;
+		uint decode_bit = 0;
+		
+		for (int t_position = 0; t_position < total_transmits; t_position++)
 		{
-			int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
-			int t_signal = t_position % Beamformer_Constants.tx_count;
+			if constexpr (READI == EncodeMatrix::HADAMARD)
+			{
+				int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
+				t_signal = t_position % Beamformer_Constants.tx_count;
+				decode_bit = (decode_row >> readi_sub_signal) & 1u;
+			}
+			else if constexpr (READI == EncodeMatrix::WALSH)
+			{
+				t_signal = t_position / Beamformer_Constants.readi_group_count;
+				int readi_sub_signal = t_position % Beamformer_Constants.readi_group_count;
+
+				// Todo, make not terrible
+				int test = (t_signal % 2 == 0) ? readi_sub_signal : (Beamformer_Constants.readi_group_count - 1 - readi_sub_signal);
+				decode_bit = (decode_row >> test) & 1u;
+			}
+			else
+			{
+				t_signal = t_position;
+			}
+			
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
 				static constexpr float APO_MIN = 0.1f;
@@ -257,27 +277,28 @@ namespace bf_kernels
 									   + Beamformer_Constants.delay_samples;
 
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
-					//size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
+					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
 					cuComplex value = utils::cubic_spline(channel_offset, scan_index, rf_data);					
 
-					// TODO: Compare performance of this vs multiplication
+					// TODO: Compare performance of these
 					// The compiler should make this a predicate op with no branching, confirm this
 					//float hadamard_sign = ((hadamard_row >> readi_sub_signal) & 1u) ? -1.0f : 1.0f;
 					//apo *= hadamard_sign;
 
 					// If the hadamard bit is 1 we need to flip the sign of this sample.
 					// XOR the bit with the sign bit of the apodization --> Avoid multiplication
-					uint hadamard_bit = (hadamard_row >> readi_sub_signal) & 1u;
-					apo = __uint_as_float(__float_as_uint(apo) ^ (hadamard_bit << 31));
-
+					if constexpr (READI != EncodeMatrix::NONE)
+					{
+						apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
+					}
+					
 					value = SCALE_F2(value, apo);
 					total = ADD_V2(total, value);
 					incoherent_sum += NORM_SQUARE_F2(value);
 				}
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
-				channel_offset += Beamformer_Constants.sample_count;
 			}
 			rx_vec.x = initial_rx.x;
 			rx_vec.y += Beamformer_Constants.pitches.y;
