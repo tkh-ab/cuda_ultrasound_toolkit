@@ -82,7 +82,8 @@
 	"expected": "cpp",
 	"numeric": "cpp",
 	"filesystem": "cpp",
-	"fstream": "cpp"
+	"fstream": "cpp",
+	"*.m": "cpp"
 },
   "C_Cpp.default.compilerPath": "cl.exe",
   "cmake.sourceDirectory": "C:/Users/tkhen/source/repos/cuda_toolkit/ogl_beamforming_cuda/external/raylib",

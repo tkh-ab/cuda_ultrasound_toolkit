@@ -267,7 +267,6 @@ namespace bf_kernels
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
 				static constexpr float APO_MIN = 0.1f;
-				//float3 rx_vec = calc_rx_vector<HERCULES>(initial_rx, c, t_position, Beamformer_Constants.pitches);
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
 
 				if(apo > APO_MIN)
@@ -279,15 +278,9 @@ namespace bf_kernels
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
-					cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+					cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+					// cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
-					// TODO: Compare performance of these
-					// The compiler should make this a predicate op with no branching, confirm this
-					//float hadamard_sign = ((hadamard_row >> readi_sub_signal) & 1u) ? -1.0f : 1.0f;
-					//apo *= hadamard_sign;
-
-					// If the hadamard bit is 1 we need to flip the sign of this sample.
-					// XOR the bit with the sign bit of the apodization --> Avoid multiplication
 					if constexpr (READI != EncodeMatrix::NONE)
 					{
 						apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
