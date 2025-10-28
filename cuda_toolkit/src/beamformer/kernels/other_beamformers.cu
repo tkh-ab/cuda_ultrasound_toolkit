@@ -89,7 +89,7 @@ namespace bf_kernels
 
                 total = ADD_V2(total, value);
                 total_used_channels++;
-                incoherent_sum += NORM_SQUARE_F2(value);
+                incoherent_sum += NORM_SQUARE_V2(value);
 
             }
         }
@@ -126,12 +126,12 @@ namespace bf_kernels
 
                 total = ADD_V2(total, value);
                 total_used_channels++;
-                incoherent_sum += NORM_SQUARE_F2(value);
+                incoherent_sum += NORM_SQUARE_V2(value);
 
             }
         }
 
-        //float coherent_sum = NORM_SQUARE_F2(total);
+        //float coherent_sum = NORM_SQUARE_V2(total);
 
         //float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
         //volume[volume_offset] = SCALE_F2(total, coherency_factor);
@@ -206,7 +206,7 @@ namespace bf_kernels
 
                 value = SCALE_F2(value, apo);
 
-                incoherent_total += NORM_SQUARE_F2(value);
+                incoherent_total += NORM_SQUARE_V2(value);
                 channel_total = ADD_V2(channel_total, value);
 
                 rx_vec.y += Beamformer_Constants.pitches.x;
@@ -227,7 +227,7 @@ namespace bf_kernels
         __syncthreads();
         if (channel_id == 0)
         {
-            //float coherence_factor = NORM_SQUARE_F2(vox_total) / (incoherent_sum.x * channel_count);
+            //float coherence_factor = NORM_SQUARE_V2(vox_total) / (incoherent_sum.x * channel_count);
             volume[volume_offset] = vox_total;
             //volume[volume_offset] = SCALE_F2(vox_total, coherence_factor);
         }
@@ -303,7 +303,7 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 				value = SCALE_F2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_F2(value);
+				incoherent_sum += NORM_SQUARE_V2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
@@ -321,7 +321,7 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 		}
 	}
 
-//            float coherent_sum = NORM_SQUARE_F2(total);
+//            float coherent_sum = NORM_SQUARE_V2(total);
 
 	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
 	//total = SCALE_F2(total, coherency_factor);
@@ -404,7 +404,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 				value = SCALE_F2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_F2(value);
+				incoherent_sum += NORM_SQUARE_V2(value);
 
 				rx_vec.x += Beamformer_Constants.pitches.x;
 			}
@@ -422,7 +422,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 		}
 	}
 
-//            float coherent_sum = NORM_SQUARE_F2(total);
+//            float coherent_sum = NORM_SQUARE_V2(total);
 
 	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);5
 	//total = SCALE_F2(total, coherency_factor);
