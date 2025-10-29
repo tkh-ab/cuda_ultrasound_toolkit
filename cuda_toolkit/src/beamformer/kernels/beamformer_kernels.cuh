@@ -32,9 +32,6 @@ namespace bf_kernels
 	__global__ void
     walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 
-    __host__ bool
-	copy_kernel_constants(const BeamformerConstants& constants);
-
     template<SequenceId SEQUENCE, EncodingMatrix READI_ORDER> __global__ void
     readi_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard);
 	
