@@ -281,7 +281,6 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 	CUDA_RETURN_IF_ERROR(cudaGetLastError());
 	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
 	
-
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
@@ -342,7 +341,6 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 	
 	CUDA_RETURN_IF_ERROR(cudaGetLastError());
 	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
-	
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
