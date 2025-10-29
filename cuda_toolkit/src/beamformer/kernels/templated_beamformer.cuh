@@ -9,13 +9,6 @@
 
 namespace bf_kernels
 {
-// TODO: If this works remove the other one in beamformer_kernels.cu
-__host__ bool
-copy_kernel_constants1(const BeamformerConstants& constants)
-{
-	CUDA_RETURN_IF_ERROR(cudaMemcpyToSymbol(Beamformer_Constants, &constants, sizeof(BeamformerConstants)));
-	return true;
-}
 
 template <SequenceId SEQ>
 concept SupportedDASSequence = (SEQ == SequenceId::FORCES) || (SEQ == SequenceId::HERCULES);

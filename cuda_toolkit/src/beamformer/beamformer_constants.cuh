@@ -17,7 +17,7 @@ namespace bf_kernels
         YZ_FOCUS = 2,
         SPHERE_FOCUS = 3,
     };  
-    struct BeamformerConstants
+    typedef struct
     {
         // Data Constants
         size_t sample_count;
@@ -46,9 +46,9 @@ namespace bf_kernels
         u8 readi_group_count;
         u8 readi_group_id;
         EncodingMatrix encoded_matrix;
-    };
-
-	__host__ bool copy_kernel_constants1(const BeamformerConstants& constants);
+    } BeamformerConstants;
 }
 
-__constant__ bf_kernels::BeamformerConstants Beamformer_Constants;
+// NOTE: The app must be built with relocatable device code for this to link properly
+// Compile with nvcc -rdc=true, the definition is in beamformer.cu
+extern __device__ __constant__ bf_kernels::BeamformerConstants Beamformer_Constants;
