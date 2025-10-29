@@ -28,7 +28,7 @@ namespace rf_fft::kernels
         if (sample_idx == 0 || sample_idx == cutoff) scale_factor *= 0.5f;
 
         uint channel_offset = blockIdx.x * sample_count;
-        cuComplex scaled_output = SCALE_F2(spectrums[channel_offset + sample_idx], scale_factor);
+        cuComplex scaled_output = SCALE_V2(spectrums[channel_offset + sample_idx], scale_factor);
 
         // Templating away this branch
         if constexpr (UseFilter)
