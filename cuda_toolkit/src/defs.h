@@ -60,7 +60,7 @@ typedef ptrdiff_t iptr;
 #define ISPOWEROF2(a)  (((a) & ((a) - 1)) == 0)
 
 #define SCALAR_ABS(x)         ((x) < 0 ? -(x) : (x))
-#define SCALE_F2(v, a) {(v).x * (a), (v).y * (a)}
+#define SCALE_V2(v, a) {(v).x * (a), (v).y * (a)}
 
 #define NORM_F2(v) (sqrtf( (v).x * (v).x + (v).y * (v).y))
 #define NORM_F3(v) (sqrtf( (v).x * (v).x + (v).y * (v).y + (v).z * (v).z))
