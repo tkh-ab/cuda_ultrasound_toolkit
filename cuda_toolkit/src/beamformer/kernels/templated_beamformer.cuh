@@ -113,7 +113,7 @@ tx_signal_and_decode_bit(int t_position, u64 decode_row, int* t_signal, uint* de
 	{
 		int readi_sub_signal = t_position / Beamformer_Constants.tx_count;
 		*t_signal = t_position % Beamformer_Constants.tx_count;
-		*decode_bit = (decode_row >> readi_sub_signal) & 1u;
+		*decode_bit = ((decode_row >> readi_sub_signal) & 1u ) << 31;
 	}
 	else if constexpr (MAT == EncodingMatrix::WALSH)
 	{
@@ -122,7 +122,7 @@ tx_signal_and_decode_bit(int t_position, u64 decode_row, int* t_signal, uint* de
 
 		// Todo, make not terrible
 		int test = (*t_signal % 2 == 0) ? readi_sub_signal : (Beamformer_Constants.readi_group_count - 1 - readi_sub_signal);
-		*decode_bit = (decode_row >> test) & 1u;
+		*decode_bit = ((decode_row >> test) & 1u ) << 31;
 	}
 	else
 	{
@@ -262,7 +262,7 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 	int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
 	int t_signal = 0;
 	uint decode_bit = 0;
-	
+
 	for (int t_position = 0; t_position < total_transmits; t_position++)
 	{
 		// Abstracts away the READI access pattern. DAS according to position, sample from signal, flip sign according to decode bit.
@@ -282,16 +282,17 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 				scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 				size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 				
-				//cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
-					cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+				cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+				//cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
 				if constexpr (READI != EncodingMatrix::NONE)
 				{
-					apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
+					// Set the sign of the apo to the hadamard coefficient -> inverts the sample if needed
+					apo = __uint_as_float(__float_as_uint(apo) ^ decode_bit);
 				}
 				
-				value = SCALE_F2(value, apo);
-				total = ADD_V2(total, value);
+				total.x = fmaf(apo, value.x, total.x);
+				total.y = fmaf(apo, value.y, total.y);
 				incoherent_sum += NORM_SQUARE_V2(value);
 			}
 
@@ -340,46 +341,50 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 	float incoherent_sum = 0.0f;
 	cuComplex total = {0.0f, 0.0f};
 	int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
-	int t_signal = 0;
 	uint decode_bit = 0;
-	int t_position = 0;
 	for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 	{
 		static constexpr float APO_MIN = 0.1f;
-		float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+		float rx_dist = NORM_F3(rx_vec);
+		float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
 		if(apo > APO_MIN)
 		{
-			for (t_position = 0; t_position < total_transmits; t_position++)
+			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
 			{
-				// Abstracts away the READI access pattern. DAS according to position, sample from signal, flip sign according to decode bit.
-				tx_signal_and_decode_bit<READI>(t_position, decode_row, &t_signal, &decode_bit);
-		
-				float scan_index = (NORM_F3(tx_vec) + NORM_F3(rx_vec))
-									* Beamformer_Constants.samples_per_meter
-									+ Beamformer_Constants.delay_samples;
-
-				scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
-				size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
-				
-				cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
-				//cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
-
-				float signed_apo;
-				if constexpr (READI != EncodingMatrix::NONE)
+				if constexpr (READI != EncodingMatrix::NONE) { decode_bit = ((decode_row >> readi_sub_signal) & 1u) << 31; }
+				for( int t_signal = 0; t_signal < Beamformer_Constants.tx_count; t_signal++)
 				{
-					// Set the sign of the apo to the hadamard coefficient -> inverts the sample if needed
-					signed_apo = __uint_as_float(__float_as_uint(apo) ^ (decode_bit << 31));
-				}
-				else
-				{
-					signed_apo = apo;
-				}
-				
-				value = SCALE_F2(value, signed_apo);
-				total = ADD_V2(total, value);
-				incoherent_sum += NORM_SQUARE_V2(value);
 
-				tx_vec.x -= Beamformer_Constants.pitches.x;
+					float scan_index = (NORM_F3(tx_vec) + rx_dist)
+										* Beamformer_Constants.samples_per_meter
+										+ Beamformer_Constants.delay_samples;
+
+					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
+					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
+					
+					cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+					//cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+
+					float signed_apo;
+					if constexpr (READI != EncodingMatrix::NONE)
+					{
+						// Set the sign of the apo to the hadamard coefficient -> inverts the sample if needed
+						signed_apo = __uint_as_float(__float_as_uint(apo) ^ decode_bit);
+					}
+					else
+					{
+						signed_apo = apo;
+					}
+					
+					// value = SCALE_F2(value, signed_apo);
+					// total = ADD_V2(total, value);
+
+					total.x = fmaf(signed_apo, value.x, total.x);
+					total.y = fmaf(signed_apo, value.y, total.y);
+					incoherent_sum += NORM_SQUARE_V2(value);
+
+					tx_vec.x -= Beamformer_Constants.pitches.x;
+				}
 			}
 			tx_vec.x += Beamformer_Constants.pitches.x * total_transmits;
 		}

@@ -128,8 +128,8 @@ namespace bf_kernels::utils
 		const float2 p0  = reinterpret_cast<const float2&>(rf_data[i + 0]);
 		const float2 p1  = reinterpret_cast<const float2&>(rf_data[i + 1]);
 
-		float rx = (1.0f - t) * p0.x + t * p1.x;
-		float ry = (1.0f - t) * p0.y + t * p1.y;
+		float rx = fmaf(p1.x - p0.x, t, p0.x);
+		float ry = fmaf(p1.y - p0.y, t, p0.y);
 
 		return { rx, ry };
 	}
