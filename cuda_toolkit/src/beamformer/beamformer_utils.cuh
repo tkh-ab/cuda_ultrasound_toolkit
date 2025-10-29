@@ -141,7 +141,7 @@ namespace bf_kernels::utils
         // Otherwise the ratio will map between 0 and pi/2 forming a hann window
         float apo = f_num * (lateral_dist_ratio / depth) /2;
         apo = fminf(apo, 0.5);
-        apo = cosf(CUDART_PI_F * apo);
+        apo = __cosf(CUDART_PI_F * apo);
         apo *= apo;
 
 		//apo = 1 - 4 * apo * apo;
