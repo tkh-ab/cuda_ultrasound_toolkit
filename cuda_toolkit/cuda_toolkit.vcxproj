@@ -146,8 +146,10 @@
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(CudaToolkitLibDir);C:\Users\tkhen\source\repos\cuda-samples\Common\lib\x64</AdditionalLibraryDirectories>
     </Link>
     <CudaLink>
-      <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(CudaToolkitLibDir);$(CudaToolkitBinDir)/crt</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </CudaLink>
     <PostBuildEvent>
       <Command>robocopy "$(ProjectDir)src\public" "$(ProjectDir)include" *.h* /MIR /NDL /NFL /NJH /NJS
@@ -168,6 +170,7 @@ IF %ERRORLEVEL% LEQ 1 (
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
       <InterleaveSourceInPTX>false</InterleaveSourceInPTX>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -218,10 +221,13 @@ IF %ERRORLEVEL% LEQ 1 (
       <AdditionalCompilerOptions>/wd 4324</AdditionalCompilerOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
       <InterleaveSourceInPTX>false</InterleaveSourceInPTX>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
     </CudaCompile>
     <CudaLink>
-      <AdditionalDependencies>nppc;nppist</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(CudaToolkitLibDir);$(CudaToolkitBinDir)/crt</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>

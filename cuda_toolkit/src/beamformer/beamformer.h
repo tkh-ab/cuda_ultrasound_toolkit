@@ -3,7 +3,6 @@
 #include <cuda_runtime.h>
 
 #include "beamformer_constants.cuh"
-#include "kernels/beamformer_kernels.cuh"
 #include "../defs.h"
 
 class Beamformer
