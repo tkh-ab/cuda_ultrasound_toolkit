@@ -123,10 +123,12 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	}
 
 	bool result = false;
-	bool TEST_channel = true;
+	bool TEST_channel = false;
 
 	if (TEST_channel)
 	{
+		TEST_channel = false;
+		std::cout << "Starting test beamform." << std::endl;
 		if (!bf_kernels::copy_kernel_constants1(_constants))
 			{
 				std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
@@ -137,6 +139,7 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	}
 	else
 	{
+		TEST_channel = true;
         std::cout << "Starting standard beamform." << std::endl;
 		if (!bf_kernels::copy_kernel_constants(_constants))
 		{
@@ -162,7 +165,12 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 		}
 		else if (bp.das_shader_id == SequenceId::FORCES)
 		{
-			result = _readi_forces_beamform(d_input, d_output);
+			if (!bf_kernels::copy_kernel_constants1(_constants))
+			{
+				std::cerr << "Beamformer: Failed to copy kernel constants." << std::endl;
+				return false;
+			}
+			result = _test_new_forces_beamform(d_input, d_output);
 		}
 		else if (bp.das_shader_id == SequenceId::HERCULES)
 		{
