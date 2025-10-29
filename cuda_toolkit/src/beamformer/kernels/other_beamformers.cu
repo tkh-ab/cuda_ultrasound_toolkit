@@ -80,11 +80,11 @@ namespace bf_kernels
 
                 if (t == 0)
                 {
-                    value = SCALE_F2(value, I_SQRT_128);
+                    value = SCALE_V2(value, I_SQRT_128);
                 }
 
                 float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-                value = SCALE_F2(value, apo);
+                value = SCALE_V2(value, apo);
 
 
                 total = ADD_V2(total, value);
@@ -117,11 +117,11 @@ namespace bf_kernels
 
                 if (t == 0)
                 {
-                    value = SCALE_F2(value, I_SQRT_128);
+                    value = SCALE_V2(value, I_SQRT_128);
                 }
 
                 float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-                value = SCALE_F2(value, apo);
+                value = SCALE_V2(value, apo);
 
 
                 total = ADD_V2(total, value);
@@ -134,7 +134,7 @@ namespace bf_kernels
         //float coherent_sum = NORM_SQUARE_V2(total);
 
         //float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
-        //volume[volume_offset] = SCALE_F2(total, coherency_factor);
+        //volume[volume_offset] = SCALE_V2(total, coherency_factor);
 
         volume[volume_offset] = total;
     }
@@ -202,9 +202,9 @@ namespace bf_kernels
 
                 // This acts as the final decoding step for the data within the readi group
                 // If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-                value = SCALE_F2(value, hadamard[hadamard_offset + g]);
+                value = SCALE_V2(value, hadamard[hadamard_offset + g]);
 
-                value = SCALE_F2(value, apo);
+                value = SCALE_V2(value, apo);
 
                 incoherent_total += NORM_SQUARE_V2(value);
                 channel_total = ADD_V2(channel_total, value);
@@ -229,7 +229,7 @@ namespace bf_kernels
         {
             //float coherence_factor = NORM_SQUARE_V2(vox_total) / (incoherent_sum.x * channel_count);
             volume[volume_offset] = vox_total;
-            //volume[volume_offset] = SCALE_F2(vox_total, coherence_factor);
+            //volume[volume_offset] = SCALE_V2(vox_total, coherence_factor);
         }
 
     }
@@ -298,9 +298,9 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				value = SCALE_V2(value, apo);
 
-				value = SCALE_F2(value, hadamard_value);
+				value = SCALE_V2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_V2(value);
@@ -324,7 +324,7 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 //            float coherent_sum = NORM_SQUARE_V2(total);
 
 	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);
-	//total = SCALE_F2(total, coherency_factor);
+	//total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
@@ -393,15 +393,15 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 
 				// if (t == 0)
 				// {
-				//     value = SCALE_F2(value, I_SQRT_128);
+				//     value = SCALE_V2(value, I_SQRT_128);
 				// }
 
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
 				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-				value = SCALE_F2(value, hadamard_value);
+				value = SCALE_V2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_V2(value);
@@ -425,7 +425,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 //            float coherent_sum = NORM_SQUARE_V2(total);
 
 	//float coherency_factor = coherent_sum / (incoherent_sum * total_used_channels);5
-	//total = SCALE_F2(total, coherency_factor);
+	//total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }

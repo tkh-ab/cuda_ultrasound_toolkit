@@ -13,12 +13,16 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.channel_count = bp.dec_data_dim[1];
     constants.tx_count = bp.dec_data_dim[2];
 
-    constants.xdc_mins = {-bp.xdc_transform[12], -bp.xdc_transform[13]};
-    constants.xdc_maxes = {bp.xdc_transform[12], bp.xdc_transform[13]};
-
     constants.samples_per_meter = bp.sampling_frequency / bp.speed_of_sound;
 
-    constants.pitches = {bp.xdc_element_pitch[0], bp.xdc_element_pitch[1]};
+    float2 pitches = {bp.xdc_element_pitch[0], bp.xdc_element_pitch[1]};
+	constants.pitches = pitches;
+
+	// Move the bounds in from the edge to the center of the first and last element
+	pitches = SCALE_V2(pitches, 0.5f);
+	constants.xdc_mins = {-bp.xdc_transform[12] + pitches.x, -bp.xdc_transform[13] + pitches.y};
+    constants.xdc_maxes = {bp.xdc_transform[12] - pitches.x, bp.xdc_transform[13] - pitches.y};
+
     constants.delay_samples = static_cast<int>((bp.time_offset * bp.sampling_frequency));
     constants.sequence = bp.das_shader_id;
 

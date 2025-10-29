@@ -61,11 +61,11 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 				value = utils::lerp_read(scan_index, rfData + channel_offset);
 
 				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
 				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-				value = SCALE_F2(value, hadamard_value);
+				value = SCALE_V2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_V2(value);
@@ -84,7 +84,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
-	total = SCALE_F2(total, coherency_factor);
+	total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
@@ -144,11 +144,11 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 
 			if (t == 0)
 			{
-				value = SCALE_F2(value, I_SQRT_128);
+				value = SCALE_V2(value, I_SQRT_128);
 			}
 
 			float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
-			value = SCALE_F2(value, apo);
+			value = SCALE_V2(value, apo);
 
 			total = ADD_V2(total, value);
 			incoherent_sum += NORM_SQUARE_V2(value);
@@ -165,7 +165,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
-	total = SCALE_F2(total, coherency_factor);
+	total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
@@ -230,11 +230,11 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 					value = utils::cubic_spline(channel_offset, scan_index, rfData);
 
 					
-					value = SCALE_F2(value, apo);
+					value = SCALE_V2(value, apo);
 
 					// This acts as the final decoding step for the data within the readi group
 					// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-					value = SCALE_F2(value, hadamard_value);
+					value = SCALE_V2(value, hadamard_value);
 
 					total = ADD_V2(total, value);
 					incoherent_sum += NORM_SQUARE_V2(value);
@@ -254,7 +254,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
-	total = SCALE_F2(total, coherency_factor);
+	total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
@@ -319,14 +319,14 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 
 				//  if (t == 0)
 				//  {
-				//      value = SCALE_F2(value, I_SQRT_128);
+				//      value = SCALE_V2(value, I_SQRT_128);
 				//  }
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
 				// If readi is turned off this will just scan the first row of the hadamard matrix (all 1s)
-				value = SCALE_F2(value, hadamard_value);
+				value = SCALE_V2(value, hadamard_value);
 
 				total = ADD_V2(total, value);
 				incoherent_sum += NORM_SQUARE_V2(value);
@@ -345,7 +345,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
 	coherency_factor = utils::clear_nan(coherency_factor);
 
-	total = SCALE_F2(total, coherency_factor);
+	total = SCALE_V2(total, coherency_factor);
 
 	volume[volume_offset] = total;
 }
@@ -456,7 +456,7 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 				value = utils::cubic_spline(smem_padding, vox_scan_index, shared_rf_data);
 
 				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
-				value = SCALE_F2(value, apo);
+				value = SCALE_V2(value, apo);
 
 				value_store[y] = ADD_V2(value_store[y], value);
 			}
