@@ -242,6 +242,7 @@ wait_for_result()
     if (!wait_for_response(&message))
     {
         warning_msg("Failed to receive response from command pipe");
+		message.opcode = ERR;
         return message;
     }
     return message;

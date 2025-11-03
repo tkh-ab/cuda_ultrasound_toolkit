@@ -17,6 +17,15 @@ namespace bf_kernels
         YZ_FOCUS = 2,
         SPHERE_FOCUS = 3,
     };  
+
+	enum class TrOscDirection
+	{
+		NONE = 0,
+		X_AXIS = 1,
+		Y_AXIS = 2,
+		BOTH_AXES = 3,
+	};
+
     typedef struct
     {
         // Data Constants
@@ -31,6 +40,8 @@ namespace bf_kernels
         int delay_samples;
         FocalDirection focal_direction;
         SequenceId sequence;
+
+		float lambda_0;
 
         // Render Constants
         uint3 voxel_dims;
