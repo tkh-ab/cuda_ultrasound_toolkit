@@ -63,42 +63,6 @@ initial_rx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc
 	}
 }
 
-template<SequenceId SEQ> __device__ inline float3
-calc_tx_vector(float3 initial_vec, uint transmit_idx, float2 pitches)
-{
-	if constexpr (SEQ == SequenceId::FORCES)
-	{
-		// tx vector is voxel_loc - focus so as we move left to right on the array we need to subtract the pitch
-		initial_vec.x -= transmit_idx * pitches.x;
-	}
-	else if constexpr (SEQ == SequenceId::HERCULES)
-	{}
-	else
-	{
-		static_assert(false, "Unsupported sequence for DAS beamforming");
-	}
-	return initial_vec;
-}
-
-template<SequenceId SEQ> __device__ inline float3
-calc_rx_vector(float3 initial_vec, uint channel_idx, uint transmit_idx, float2 pitches)
-{
-	if constexpr (SEQ == SequenceId::FORCES)
-	{
-		initial_vec.x += channel_idx * pitches.x;
-	}
-	else if constexpr (SEQ == SequenceId::HERCULES)
-	{
-		initial_vec.x += channel_idx * pitches.x;
-		initial_vec.y += transmit_idx * pitches.y;
-	}
-	else
-	{
-		static_assert(false, "Unsupported sequence for DAS beamforming");
-	}
-	return initial_vec;
-}
-
 // Returns the unpacked decode bit in the top bit of the uint
 template<EncodingMatrix MAT> __device__ __forceinline__ uint 
 unpack_decode_bit(int signal, int sub_signal, u64 decode_row)
@@ -120,14 +84,6 @@ unpack_decode_bit(int signal, int sub_signal, u64 decode_row)
 	{
 		return 0;
 	}
-}
-
-__device__ inline float calc_total_distance(float3 tx_vec, float3 rx_vec, float focal_depth)
-{
-	// Tx vec is from the focus -> the voxel.
-	// If its z value is negative then we are between the transducer and the focus.
-	return focal_depth + NORM_F3(rx_vec) + copysignf(NORM_F3(tx_vec), tx_vec.z);
-	//return focal_depth + NORM_F3(rx_vec) + NORM_F3(tx_vec) * copysignf(1.0f, tx_vec.z);
 }
 
 template<FocalDirection DIR, EncodingMatrix READI> __global__ void
