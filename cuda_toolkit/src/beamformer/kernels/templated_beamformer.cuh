@@ -84,7 +84,36 @@ unpack_decode_bit(int signal, int sub_signal, u64 decode_row)
 	{
 		return 0;
 	}
+}	
+
+// Calculate mean and std of the gaussian apo for transverse oscillation at lambda_t
+// https://ieeexplore.ieee.org/document/7937866 TO paper. 
+__device__ inline float2
+calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
+{
+// 	// Equation one of the paper 
+// 	float center = depth * lambda_0 / lambda_t;
+// 	center = min(center, depth/(f_number * 2));
+
+	float center = depth / (f_number * 2);
+	// We can arbitrarily set the STD, right now set it so that the FWHM 
+	// is halfway between the center of the array and the center of the peak
+	// TODO: Test the tradeoff of peak sharpness vs sensitivity from weaker apertures
+	//static constexpr float FWHM_FACTOR = 1 / 2.3548f; // 2*sqrt(2*ln(2)) This is a rough approximation
+	static constexpr float FWHM_FACTOR = 1.0f / 4.0f;
+	float std = center * FWHM_FACTOR;
+	std = 1 / (2.0f * std * std); // We aren't normalizing so this is all we need the std for 
+	return make_float2(center, std);
 }
+
+__device__ inline float
+calc_tr_osc_apo(float2 gauss_stats, float sample_pt)
+{
+	float exp = sample_pt;
+	exp = -exp * exp * gauss_stats.y;
+	return expf(exp);
+}
+
 
 template<FocalDirection DIR, EncodingMatrix READI> __global__ void
 hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
@@ -219,6 +248,14 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 	float3 rx_vec = initial_rx_vec<FORCES>(Beamformer_Constants.xdc_mins,
 											Beamformer_Constants.pitches,
 											vox_loc);
+
+	float rx_pos = Beamformer_Constants.xdc_mins.x;
+
+	static constexpr float lambda_t = 5.0e-4f; // test 0.1 mm transverse oscillation wavelength
+	float2 tr_osc_gauss = calc_tr_osc_gauss(lambda_t,
+												Beamformer_Constants.lambda_0,
+												vox_loc.z,
+												Beamformer_Constants.f_number);
 							
 	float incoherent_sum = 0.0f;
 	cuComplex total = {0.0f, 0.0f};
@@ -226,9 +263,10 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 	uint decode_bit = 0;
 	for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 	{
-		static constexpr float APO_MIN = 0.1f;
+		static constexpr float APO_MIN = 0.0f;
 		float rx_dist = NORM_F3(rx_vec);
-		float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+		//float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+		float apo = calc_tr_osc_apo(tr_osc_gauss, abs(tr_osc_gauss.x - abs(rx_pos)));
 		if(apo > APO_MIN)
 		{
 			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
@@ -268,6 +306,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 			tx_vec.x += Beamformer_Constants.pitches.x * total_transmits;
 		}
 		rx_vec.x += Beamformer_Constants.pitches.x;
+		rx_pos += Beamformer_Constants.pitches.x;
 	}
 
 	float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;
