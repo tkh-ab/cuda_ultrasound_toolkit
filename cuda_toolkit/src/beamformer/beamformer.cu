@@ -23,6 +23,7 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.tx_count = bp.dec_data_dim[2];
 
     constants.samples_per_meter = bp.sampling_frequency / bp.speed_of_sound;
+	constants.lambda_0 = bp.speed_of_sound / bp.center_frequency;
 
     float2 pitches = {bp.xdc_element_pitch[0], bp.xdc_element_pitch[1]};
 	constants.pitches = pitches;
