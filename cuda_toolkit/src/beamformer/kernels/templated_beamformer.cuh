@@ -95,12 +95,13 @@ calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
 // 	float center = depth * lambda_0 / lambda_t;
 // 	center = min(center, depth/(f_number * 2));
 
-	float center = depth / (f_number * 2);
+	//float center = depth / (f_number * 2);
+	float center = 10.0e-3f;
 	// We can arbitrarily set the STD, right now set it so that the FWHM 
 	// is halfway between the center of the array and the center of the peak
 	// TODO: Test the tradeoff of peak sharpness vs sensitivity from weaker apertures
 	//static constexpr float FWHM_FACTOR = 1 / 2.3548f; // 2*sqrt(2*ln(2)) This is a rough approximation
-	static constexpr float FWHM_FACTOR = 1.0f / 4.0f;
+	static constexpr float FWHM_FACTOR = 1.0f / 16.0f;
 	float std = center * FWHM_FACTOR;
 	std = 1 / (2.0f * std * std); // We aren't normalizing so this is all we need the std for 
 	return make_float2(center, std);
@@ -109,7 +110,7 @@ calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
 __device__ inline float
 calc_tr_osc_apo(float2 gauss_stats, float sample_pt)
 {
-	float exp = sample_pt;
+	float exp = abs(sample_pt) - gauss_stats.x;
 	exp = -exp * exp * gauss_stats.y;
 	return expf(exp);
 }
@@ -266,7 +267,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 		static constexpr float APO_MIN = 0.0f;
 		float rx_dist = NORM_F3(rx_vec);
 		//float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
-		float apo = calc_tr_osc_apo(tr_osc_gauss, abs(tr_osc_gauss.x - abs(rx_pos)));
+		float apo = calc_tr_osc_apo(tr_osc_gauss, rx_pos);
 		if(apo > APO_MIN)
 		{
 			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
@@ -282,8 +283,8 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
-					cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
-					//cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
+					//cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
+					cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
 					float signed_apo;
 					if constexpr (READI != EncodingMatrix::NONE)
