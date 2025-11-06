@@ -96,12 +96,12 @@ calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
 // 	center = min(center, depth/(f_number * 2));
 
 	//float center = depth / (f_number * 2);
-	float center = 10.0e-3f;
+	float center = 8.0e-3f;
 	// We can arbitrarily set the STD, right now set it so that the FWHM 
 	// is halfway between the center of the array and the center of the peak
 	// TODO: Test the tradeoff of peak sharpness vs sensitivity from weaker apertures
 	//static constexpr float FWHM_FACTOR = 1 / 2.3548f; // 2*sqrt(2*ln(2)) This is a rough approximation
-	static constexpr float FWHM_FACTOR = 1.0f / 16.0f;
+	static constexpr float FWHM_FACTOR = 1.0f / 4.0f;
 	float std = center * FWHM_FACTOR;
 	std = 1 / (2.0f * std * std); // We aren't normalizing so this is all we need the std for 
 	return make_float2(center, std);
@@ -110,9 +110,17 @@ calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
 __device__ inline float
 calc_tr_osc_apo(float2 gauss_stats, float sample_pt)
 {
-	float exp = abs(sample_pt) - gauss_stats.x;
-	exp = -exp * exp * gauss_stats.y;
-	return expf(exp);
+	float apo = CUDART_PI_F * sample_pt / 16.0e-3f;
+	apo = CLAMP(apo, -CUDART_PI_F, CUDART_PI_F);
+	apo = sinf(apo);
+
+	const uint power = 6;
+
+	for(uint i = 0; i < power - 1; i++)
+	{
+		apo *= apo;
+	}
+	return apo;
 }
 
 
@@ -237,10 +245,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 		Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
 	};
 
-	if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims))
-	{
-		return;
-	}
+	if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims)) return;
 
 	float3 tx_vec = initial_tx_vec<FORCES, FocalDirection::XZ_FOCUS>(Beamformer_Constants.xdc_mins,
 													Beamformer_Constants.pitches,
@@ -251,6 +256,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 											vox_loc);
 
 	float rx_pos = Beamformer_Constants.xdc_mins.x;
+	float tx_pos = Beamformer_Constants.xdc_mins.x;
 
 	static constexpr float lambda_t = 5.0e-4f; // test 0.1 mm transverse oscillation wavelength
 	float2 tr_osc_gauss = calc_tr_osc_gauss(lambda_t,
@@ -266,16 +272,17 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 	{
 		static constexpr float APO_MIN = 0.0f;
 		float rx_dist = NORM_F3(rx_vec);
-		//float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
-		float apo = calc_tr_osc_apo(tr_osc_gauss, rx_pos);
-		if(apo > APO_MIN)
+		//float rx_apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+		float rx_apo = calc_tr_osc_apo(tr_osc_gauss, rx_pos);
+		if(rx_apo > APO_MIN)
 		{
 			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
 			{
 				if constexpr (READI != EncodingMatrix::NONE) { decode_bit = ((decode_row >> readi_sub_signal) & 1u) << 31; }
 				for( int t_signal = 0; t_signal < Beamformer_Constants.tx_count; t_signal++)
 				{
-
+					float tx_apo = calc_tr_osc_apo(tr_osc_gauss, tx_pos);
+					float apo = rx_apo;
 					float scan_index = (NORM_F3(tx_vec) + rx_dist)
 										* Beamformer_Constants.samples_per_meter
 										+ Beamformer_Constants.delay_samples;
@@ -302,9 +309,11 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					incoherent_sum += NORM_SQUARE_V2(value);
 
 					tx_vec.x -= Beamformer_Constants.pitches.x;
+					tx_pos += Beamformer_Constants.pitches.x;
 				}
 			}
 			tx_vec.x += Beamformer_Constants.pitches.x * total_transmits;
+			tx_pos -= Beamformer_Constants.pitches.x * total_transmits;
 		}
 		rx_vec.x += Beamformer_Constants.pitches.x;
 		rx_pos += Beamformer_Constants.pitches.x;
