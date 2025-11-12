@@ -108,19 +108,18 @@ calc_tr_osc_gauss(float lambda_t, float lambda_0, float depth, float f_number)
 }
 
 __device__ inline float
-calc_tr_osc_apo(float2 gauss_stats, float sample_pt)
+sin_apo_to(float element_loc, float peak_center, float power)
 {
-	float apo = CUDART_PI_F * sample_pt / 16.0e-3f;
+	float apo = CUDART_PI_F * element_loc / peak_center;
 	apo = CLAMP(apo, -CUDART_PI_F, CUDART_PI_F);
 	apo = sinf(apo);
+	float apo_out = 1.0f;
 
-	const uint power = 6;
-
-	for(uint i = 0; i < power - 1; i++)
+	for(uint i = 0; i < power; i++)
 	{
-		apo *= apo;
+		apo_out *= apo;
 	}
-	return apo;
+	return apo_out;
 }
 
 
@@ -231,7 +230,7 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 }
 
 // Moving the channel loop outside the kernel. No atomics for now so only one execuation can be live at a time.
-template<EncodingMatrix READI> __global__ void
+template<EncodingMatrix READI, ApoType APO> __global__ void
 forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
 {
 	// TODO: Check if inlining this to the vox_loc calculation drops the register count
@@ -257,32 +256,41 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 
 	float rx_pos = Beamformer_Constants.xdc_mins.x;
 	float tx_pos = Beamformer_Constants.xdc_mins.x;
-
-	static constexpr float lambda_t = 5.0e-4f; // test 0.1 mm transverse oscillation wavelength
-	float2 tr_osc_gauss = calc_tr_osc_gauss(lambda_t,
-												Beamformer_Constants.lambda_0,
-												vox_loc.z,
-												Beamformer_Constants.f_number);
 							
 	float incoherent_sum = 0.0f;
 	cuComplex total = {0.0f, 0.0f};
 	int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
 	uint decode_bit = 0;
+	float tx_apo = 1;
+	float rx_apo = 1;
 	for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 	{
 		static constexpr float APO_MIN = 0.0f;
 		float rx_dist = NORM_F3(rx_vec);
-		//float rx_apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
-		float rx_apo = calc_tr_osc_apo(tr_osc_gauss, rx_pos);
-		if(rx_apo > APO_MIN)
+
+		if constexpr (APO == ApoType::RX_HANN || APO == ApoType::TX_TO_SIN)
+		{
+			rx_apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+		}
+		else if constexpr (APO == ApoType::RX_TO_SIN || APO == ApoType::BOTH_TO_SIN)
+		{
+			rx_apo = sin_apo_to(rx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+		}
+
+		//if(rx_apo > APO_MIN)	
 		{
 			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
 			{
 				if constexpr (READI != EncodingMatrix::NONE) { decode_bit = ((decode_row >> readi_sub_signal) & 1u) << 31; }
 				for( int t_signal = 0; t_signal < Beamformer_Constants.tx_count; t_signal++)
 				{
-					float tx_apo = calc_tr_osc_apo(tr_osc_gauss, tx_pos);
-					float apo = rx_apo;
+					
+					if constexpr (APO == ApoType::BOTH_TO_SIN || APO == ApoType::TX_TO_SIN)
+					{
+						tx_apo = sin_apo_to(tx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+					}
+
+					float apo = rx_apo * tx_apo;
 					float scan_index = (NORM_F3(tx_vec) + rx_dist)
 										* Beamformer_Constants.samples_per_meter
 										+ Beamformer_Constants.delay_samples;
@@ -304,10 +312,11 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 						signed_apo = apo;
 					}
 					
+
 					total.x = fmaf(signed_apo, value.x, total.x);
 					total.y = fmaf(signed_apo, value.y, total.y);
 					incoherent_sum += NORM_SQUARE_V2(value);
-
+					
 					tx_vec.x -= Beamformer_Constants.pitches.x;
 					tx_pos += Beamformer_Constants.pitches.x;
 				}
