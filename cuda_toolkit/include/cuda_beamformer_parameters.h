@@ -60,6 +60,14 @@ typedef enum EncodingMatrix
     WALSH = 2,
 } EncodingMatrix;
 
+typedef enum ApoType
+{
+	RX_HANN = 0,
+	RX_TO_SIN = 1,
+	TX_TO_SIN = 2,
+	BOTH_TO_SIN = 3,
+} ApoType;
+
 typedef struct NccMotionParameters
 {
 	uint patch_size; 			// Patch size in pixels (assumed square)
@@ -132,6 +140,8 @@ typedef struct CudaBeamformerParameters
 	float rf_filter[MAX_FILTER_LENGTH]; // Time domain kernel of the filter (assumed to be sampled at fs) (MAX 1024)
 
 	InputDataTypes data_type;		// Type of the raw data being passed in
+	ApoType apo_type;				// Type of apodization to apply during beamforming
+	int to_power;					// Power to raise the TO apodization to
 } CudaBeamformerParameters;
 
 #ifdef __cplusplus

@@ -80,6 +80,9 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
 
 	constants.coherency_weighting = min(max(bp.coherency_weighting, 0.0f), 1.0f);
 
+	constants.apo_type = bp.apo_type;
+	constants.to_power = bp.to_power;
+
     bool readi_matrix_changed = (_constants.readi_group_count != bp.readi_group_count ||
                                 _constants.encoded_matrix != bp.decode);
 
@@ -309,7 +312,7 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
 	auto start = std::chrono::high_resolution_clock::now();
 	u64 compact_hadamard_row = 0;
-
+	std::cout << "Using apo: " << _constants.apo_type << std::endl;
 	// Todo: make a better dispatcher
 	if(_constants.readi_group_count > 1)
 	{
@@ -327,20 +330,72 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 		}
 		free(hadamard_row);
 
+		
 		if(_constants.encoded_matrix == EncodingMatrix::WALSH)
 		{
 
-			bf_kernels::forces_beamform_new<EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			switch (_constants.apo_type)
+			{
+				case ApoType::RX_HANN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::RX_HANN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::TX_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::TX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::RX_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::RX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::BOTH_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::BOTH_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				default:
+					std::cerr << "Invalid apodization type for FORCES." << std::endl;
+					return false;
+			}
 	
 		}
 		else if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
 		{
-			bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			switch (_constants.apo_type)
+			{
+				case ApoType::RX_HANN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD, ApoType::RX_HANN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::TX_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD, ApoType::TX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::RX_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD, ApoType::RX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				case ApoType::BOTH_TO_SIN:
+					bf_kernels::forces_beamform_new<EncodingMatrix::HADAMARD, ApoType::BOTH_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				break;
+				default:
+					std::cerr << "Invalid apodization type for FORCES." << std::endl;
+					return false;
+			}
 		}
 	}
 	else
 	{
-		bf_kernels::forces_beamform_new<EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+		switch (_constants.apo_type)
+		{
+			case ApoType::RX_HANN:
+				bf_kernels::forces_beamform_new<EncodingMatrix::NONE, ApoType::RX_HANN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			break;
+			case ApoType::TX_TO_SIN:
+				bf_kernels::forces_beamform_new<EncodingMatrix::NONE, ApoType::TX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			break;
+			case ApoType::RX_TO_SIN:
+				bf_kernels::forces_beamform_new<EncodingMatrix::NONE, ApoType::RX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			break;
+			case ApoType::BOTH_TO_SIN:
+				bf_kernels::forces_beamform_new<EncodingMatrix::NONE, ApoType::BOTH_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			break;
+			default:
+				std::cerr << "Invalid apodization type for FORCES." << std::endl;
+				return false;
+		}
 	}
 	
 	
