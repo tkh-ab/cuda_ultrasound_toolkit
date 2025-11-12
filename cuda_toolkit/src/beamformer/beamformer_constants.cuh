@@ -57,6 +57,9 @@ namespace bf_kernels
         u8 readi_group_count;
         u8 readi_group_id;
         EncodingMatrix encoded_matrix;
+
+		ApoType apo_type;				// Type of apodization to apply during beamforming
+		int to_power;					// Power to raise the TO apodization to
     } BeamformerConstants;
 }
 
