@@ -188,7 +188,7 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
 				static constexpr float APO_MIN = 0.1f;
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 
 				if(apo > APO_MIN)
 				{
@@ -270,7 +270,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 
 		if constexpr (APO == ApoType::RX_HANN || APO == ApoType::TX_TO_SIN)
 		{
-			rx_apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+			rx_apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.fn_rx);
 		}
 		else if constexpr (APO == ApoType::RX_TO_SIN || APO == ApoType::BOTH_TO_SIN)
 		{
@@ -288,6 +288,10 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					if constexpr (APO == ApoType::BOTH_TO_SIN || APO == ApoType::TX_TO_SIN)
 					{
 						tx_apo = sin_apo_to(tx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+					}
+					else
+					{
+						tx_apo = utils::f_num_apodization(abs(tx_vec.x), vox_loc.z, Beamformer_Constants.fn_tx);
 					}
 
 					float apo = rx_apo * tx_apo;
@@ -312,7 +316,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 						signed_apo = apo;
 					}
 					
-
+					//tests
 					total.x = fmaf(signed_apo, value.x, total.x);
 					total.y = fmaf(signed_apo, value.y, total.y);
 					incoherent_sum += NORM_SQUARE_V2(value);
