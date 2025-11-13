@@ -114,7 +114,8 @@ typedef struct CudaBeamformerParameters
 	float off_axis_pos;				// Unused
 	BeamformPlane beamform_plane;	// Unused
 
-	float f_number;					// Dynamic receive apodization F# 
+	float fn_tx;					// Dynamic transmit apodization F#
+	float fn_rx;					// Dynamic receive apodization F# 
 	bool interpolate;				// Interpolate between samples during beamforming 
 	float coherency_weighting;		// Apply coherency factor weighting to output data raised to the power of this value
 
