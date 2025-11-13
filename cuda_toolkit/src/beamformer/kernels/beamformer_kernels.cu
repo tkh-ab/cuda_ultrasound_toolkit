@@ -60,7 +60,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 
 				value = utils::lerp_read(scan_index, rfData + channel_offset);
 
-				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.fn_rx);
 				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
@@ -147,7 +147,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 				value = SCALE_V2(value, I_SQRT_128);
 			}
 
-			float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.f_number);
+			float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.fn_rx);
 			value = SCALE_V2(value, apo);
 
 			total = ADD_V2(total, value);
@@ -218,7 +218,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 		{
 			for (int e = 0; e < channel_count; e++)
 			{
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				static constexpr float APO_MIN = 0.1f;
 				if(apo > APO_MIN)
 				{
@@ -321,7 +321,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 				//  {
 				//      value = SCALE_V2(value, I_SQRT_128);
 				//  }
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group
@@ -455,7 +455,7 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 				vox_scan_index = CLAMP(vox_scan_index, 0.0f, 127.0f);
 				value = utils::cubic_spline(smem_padding, vox_scan_index, shared_rf_data);
 
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				value = SCALE_V2(value, apo);
 
 				value_store[y] = ADD_V2(value_store[y], value);

@@ -47,7 +47,8 @@ namespace bf_kernels
         uint3 voxel_dims;
         float3 volume_mins;
         float3 resolutions;
-        float f_number;
+		float fn_tx; // Tx f-number
+        float fn_rx; // Rx f-number
 		float coherency_weighting;
 
         // Sequence Constants

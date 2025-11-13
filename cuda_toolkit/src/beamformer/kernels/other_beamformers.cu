@@ -28,7 +28,7 @@ namespace bf_kernels
         };
 
         // If the voxel is out of the f_number defined range for all elements skip it
-        if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
+        if (!utils::check_ranges(vox_loc, Beamformer_Constants.fn_rx, Beamformer_Constants.xdc_maxes)) return;
 
         float3 src_pos = Beamformer_Constants.focal_point;
 
@@ -83,7 +83,7 @@ namespace bf_kernels
                     value = SCALE_V2(value, I_SQRT_128);
                 }
 
-                float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+                float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
                 value = SCALE_V2(value, apo);
 
 
@@ -120,7 +120,7 @@ namespace bf_kernels
                     value = SCALE_V2(value, I_SQRT_128);
                 }
 
-                float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+                float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
                 value = SCALE_V2(value, apo);
 
 
@@ -163,7 +163,7 @@ namespace bf_kernels
         float3 src_pos = Beamformer_Constants.focal_point;
 
         // If the voxel is out of the f_number defined range for all elements skip it
-        if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
+        if (!utils::check_ranges(vox_loc, Beamformer_Constants.fn_rx, Beamformer_Constants.xdc_maxes)) return;
 
         float3 tx_vec = utils::calc_tx_distance(vox_loc, src_pos, Beamformer_Constants.focal_direction);
 
@@ -175,7 +175,7 @@ namespace bf_kernels
 
         uint readi_group_size = Beamformer_Constants.channel_count / Beamformer_Constants.tx_count;
         uint hadamard_offset = Beamformer_Constants.channel_count * readi_group_id;
-        float f_number = Beamformer_Constants.f_number;
+        float f_number = Beamformer_Constants.fn_rx;
         uint delay_samples = 12;
         float apo;
         size_t channel_offset = 0;
@@ -297,7 +297,7 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 				scan_index = utils::clampf(scan_index, 0.0f, (float)sample_count - 2.0f);
 
 				value = utils::cubic_spline(channel_offset, scan_index, rfData);
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				value = SCALE_V2(value, apo);
 
 				value = SCALE_V2(value, hadamard_value);
@@ -396,7 +396,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 				//     value = SCALE_V2(value, I_SQRT_128);
 				// }
 
-				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.f_number);
+				float apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				value = SCALE_V2(value, apo);
 
 				// This acts as the final decoding step for the data within the readi group

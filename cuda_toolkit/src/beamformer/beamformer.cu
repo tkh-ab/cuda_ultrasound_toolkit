@@ -47,7 +47,8 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
                                 / (bp.output_points[2] - 1);
 
     constants.resolutions = {lateral_resolution, elevation_resolution, axial_resolution};
-    constants.f_number = bp.f_number;
+    constants.fn_rx = bp.fn_rx;
+	constants.fn_tx = bp.fn_tx;
 
     constants.mixes_count = static_cast<u8>(bp.mixes_count);
     constants.mixes_offset = static_cast<u8>(bp.mixes_offset);
