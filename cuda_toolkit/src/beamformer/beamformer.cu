@@ -332,30 +332,7 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 		free(hadamard_row);
 
 		
-		if(_constants.encoded_matrix == EncodingMatrix::WALSH)
-		{
-
-			switch (_constants.apo_type)
-			{
-				case ApoType::RX_HANN:
-					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::RX_HANN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
-				break;
-				case ApoType::TX_TO_SIN:
-					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::TX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
-				break;
-				case ApoType::RX_TO_SIN:
-					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::RX_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
-				break;
-				case ApoType::BOTH_TO_SIN:
-					bf_kernels::forces_beamform_new<EncodingMatrix::WALSH, ApoType::BOTH_TO_SIN><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
-				break;
-				default:
-					std::cerr << "Invalid apodization type for FORCES." << std::endl;
-					return false;
-			}
-	
-		}
-		else if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
+		if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
 		{
 			switch (_constants.apo_type)
 			{
@@ -375,6 +352,11 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 					std::cerr << "Invalid apodization type for FORCES." << std::endl;
 					return false;
 			}
+		}
+		else
+		{
+			std::cerr << "FORCES only supports Hadamard encoding at this time." << std::endl;
+			return false;
 		}
 	}
 	else
