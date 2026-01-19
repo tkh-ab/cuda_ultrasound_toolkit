@@ -188,19 +188,17 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 			for (int c = 0; c < Beamformer_Constants.channel_count; c++)
 			{
 				static constexpr float APO_MIN = 0.1f;
-				float x_apo = 1.0f;
-				float y_apo = 1.0f;
 				float apo;
 				if(Beamformer_Constants.apo_type == ApoType::RX_TO_SIN)
 				{
-					x_apo = sin_apo_to(rx_vec.x + vox_loc.x, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+					float x_apo = sin_apo_to(rx_vec.x + vox_loc.x, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+					float y_apo = sin_apo_to(rx_vec.y + vox_loc.y, Beamformer_Constants.xdc_maxes.y, Beamformer_Constants.to_power);
+					apo = x_apo * y_apo;
 				}
 				else
 				{
-					x_apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
+					apo = utils::f_num_apodization(NORM_F2(rx_vec), vox_loc.z, Beamformer_Constants.fn_rx);
 				}
-				
-				apo = x_apo * y_apo;
 
 				if(apo > APO_MIN)
 				{
@@ -289,7 +287,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 			rx_apo = sin_apo_to(rx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
 		}
 
-		//if(rx_apo > APO_MIN)	
+		if(rx_apo > APO_MIN)	
 		{
 			for (int readi_sub_signal = 0; readi_sub_signal < Beamformer_Constants.readi_group_count; readi_sub_signal++)
 			{
