@@ -47,9 +47,14 @@ __global__ void
 block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
 {
 	
-	constexpr int2 Patch_Margins = { 2, 2 };
+	// constexpr int2 Patch_Margins = { 2, 2 };
+	// constexpr int Patch_Width = Patch_Margins.x * 2 + 1;
+	// constexpr int Total_Samples = 25; // 5x5 polynomial fit
+
+	constexpr int2 Patch_Margins = { 1, 1 };
 	constexpr int Patch_Width = Patch_Margins.x * 2 + 1;
-	constexpr int Total_Samples = 25; // 5x5 polynomial fit
+	constexpr int Total_Samples = 9; // 5x5 polynomial fit
+
 
 	int peak_id = threadIdx.x;
 	
@@ -95,7 +100,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 		#pragma unroll
 		for(int j = 0; j < Total_Samples; j++)
 		{
-			sum += P5[i * Total_Samples + j] * values[j];
+			sum += P3[i * Total_Samples + j] * values[j];
 		}
 		coeff[i] = sum;
 	}
@@ -111,7 +116,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
 
 	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
-	float peak = values[12]; // Center value of the patch
+	float peak = values[4]; // Center value of the patch
 	float calculated_peak = coeff[5];
 
 	// if(calculated_peak < peak)
