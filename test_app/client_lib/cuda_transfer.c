@@ -250,7 +250,7 @@ wait_for_result()
 
 static void
 _motion_detect(const void* images, size_t data_size,
-			  const NCCMotionParameters* params, int* motion_maps)
+			  const NCCMotionParameters* params, float* motion_maps)
 {
 	if (data_size > DATA_SMEM_SIZE)
 	{
@@ -359,7 +359,7 @@ beamform_f32(const float* data, CudaBeamformerParameters bp, float* output)
 }
 
 void
-motion_detect_f32(const float* images, NCCMotionParameters params, int* motion_maps)
+motion_detect_f32(const float* images, NCCMotionParameters params, float* motion_maps)
 {
 	size_t data_size = params.image_dims[0] * params.image_dims[1] * params.frame_count * sizeof(float);
 	_motion_detect((void*)images, data_size, &params, motion_maps);

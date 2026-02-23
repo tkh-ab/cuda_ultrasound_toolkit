@@ -27,9 +27,9 @@ namespace kernels {
 	constexpr uint PEAK_CANDIDATE_COUNT = 32; // Maximum number of peaks per block
 
 	// Warp reduce to find the maximum value and its position
-	// Treating the int2 position as a single 64-bit integer for the intrinsics
+	// Treating the float2 position as a single 64-bit integer for the intrinsics
 	__inline__ __device__ void
-	warp_reduce_max(float* val, i64 * pos)
+	warp_reduce_max(float* val, double * pos)
 	{
 		static constexpr unsigned mask = 0xffffffffu;
 		static constexpr int warp_size = 32;
@@ -37,7 +37,7 @@ namespace kernels {
 		for (int offset = warp_size / 2; offset > 0; offset /= 2)
 		{
 			float v2 = __shfl_down_sync(mask, *val, offset);
-			i64  p2 = __shfl_down_sync(mask, *pos, offset);
+			double  p2 = __shfl_down_sync(mask, *pos, offset);
 			if (v2 > *val)
 			{
 				*val = v2;
@@ -53,7 +53,7 @@ namespace kernels {
 
 	// Test the prominance and sharpness of the peaks, set any that fail to zero.
 	__global__ void
-	test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int corr_line_step, 
+	test_peaks(const float* d_corr_map, float2* d_motion_map, NppiSize dims, int corr_line_step, 
 			   int2 * peak_positions, float* peak_values, int2 no_shift_pos,
 			   float min_sharpness, float rel_threshold, float abs_threshold);
 
@@ -97,26 +97,27 @@ namespace kernels {
 		-0.0742857f,  0.0114286f,  0.04f,      0.0114286f, -0.0742857f
 	};
 
+
 	__device__ constexpr float P3[54] = {
+		1/6.f, -1/3.f,  1/6.f,
+		1/6.f, -1/3.f,  1/6.f,
+		1/6.f, -1/3.f,  1/6.f,
+		
 		1/6.f,  1/6.f,  1/6.f,
 		-1/3.f, -1/3.f, -1/3.f,
 		1/6.f,  1/6.f,  1/6.f,
-
-		1/6.f, -1/3.f,  1/6.f,
-		1/6.f, -1/3.f,  1/6.f,
-		1/6.f, -1/3.f,  1/6.f,
 
 		1/4.f, 0.f, -1/4.f,
 		0.f, 0.f, 0.f,
 		-1/4.f, 0.f, 1/4.f,
 
+		-1/6.f, 0.f, 1/6.f,
+		-1/6.f, 0.f, 1/6.f,
+		-1/6.f, 0.f, 1/6.f,
+
 		-1/6.f, -1/6.f, -1/6.f,
 		0.f, 0.f, 0.f,
-		1/6.f,  1/6.f,  1/6.f
-
-		-1/6.f, 0.f, 1/6.f,
-		-1/6.f, 0.f, 1/6.f,
-		-1/6.f, 0.f, 1/6.f,
+		1/6.f,  1/6.f,  1/6.f,
 
 		-1/9.f, 2/9.f, -1/9.f,
 		2/9.f, 5/9.f, 2/9.f,
