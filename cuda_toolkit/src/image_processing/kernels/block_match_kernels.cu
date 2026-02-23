@@ -27,6 +27,16 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 	}
 
     BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
+
+	// for (int i = 0; i < Vals_Per_Thread; i++)
+	// {
+	// 	if (values[i] > 1.0f)
+	// 	{
+	// 		values[i] = -1.0f;
+	// 	}
+	// }
+
+
 	__syncthreads();
 
 	BlockRadixSort(sort_storage).SortDescendingBlockedToStriped(values, indicies);
@@ -44,7 +54,7 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
+block_match::kernels::test_peaks(const float* d_corr_map, float2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
 {
 	
 	// constexpr int2 Patch_Margins = { 2, 2 };
@@ -93,23 +103,23 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	
 	// Generate the polynomial fit 
 	float coeff[6] = { 0.0f };
-	#pragma unroll
+	//#pragma unroll
 	for(int i = 0; i < 6; i++)
 	{
 		float sum = 0.0f;
-		#pragma unroll
+		//#pragma unroll
 		for(int j = 0; j < Total_Samples; j++)
 		{
-			sum += P3[i * Total_Samples + j] * values[j];
+			coeff[i] += P3[i * Total_Samples + j] * values[j];
 		}
-		coeff[i] = sum;
+		//coeff[i] = sum;
 	}
 
 	float sharpness[2] = { 0.0f, 0.0f };
 
+	// Curvature of the paraboloid 
 	// v/(a^2 + b^2 + c^2 - 2ab)
 	float root = sqrtf( coeff[0] * coeff[0] + coeff[1] * coeff[1] + coeff[2] * coeff[2] - 2 * coeff[0] * coeff[1] );
-
 	sharpness[0] = coeff[0] + coeff[1] + root;
 	sharpness[1] = coeff[0] + coeff[1] - root;
 
@@ -119,6 +129,21 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	float peak = values[4]; // Center value of the patch
 	float calculated_peak = coeff[5];
 
+	float denominator = coeff[2] * coeff[2] - 4 * coeff[1] * coeff[0];
+	float2 sub_pixel_offset = { 0.0f, 0.0f };
+	if (denominator != 0.0f)
+	{
+		sub_pixel_offset.x = (2 * coeff[1] * coeff[3] - coeff[2] * coeff[4]) / denominator;
+		sub_pixel_offset.y = (2 * coeff[0] * coeff[4] - coeff[2] * coeff[3]) / denominator;
+	}
+
+	sub_pixel_offset.x = CLAMP(sub_pixel_offset.x, -1.0f, 1.0f);
+	sub_pixel_offset.y = CLAMP(sub_pixel_offset.y, -1.0f, 1.0f);
+
+	//float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
+
+	float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
+
 	// if(calculated_peak < peak)
 	// {
 	// 	printf("Calculated peak %f < peak %f at position (%d, %d)\n", calculated_peak, peak, peak_pos.x, peak_pos.y);
@@ -127,17 +152,17 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
 
-	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold)
+	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold || peak > 1.0f)
 	{
 		peak = -1.0f;
 	}
 
-	warp_reduce_max(&peak, reinterpret_cast<i64*>(&peak_pos));
+	warp_reduce_max(&peak, reinterpret_cast<double*>(&total_offset));
 
 	if (threadIdx.x == 0 && peak > abs_threshold)
 	{
-		peak_pos = SUB_V2(peak_pos, no_shift_pos);
-		*d_motion_map = peak_pos; // Store the peak position in the motion map
+		total_offset = SUB_V2(total_offset, no_shift_pos);
+		*d_motion_map = total_offset; // Store the peak position in the motion map
 	}
 	return;
 
@@ -147,7 +172,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, int2* d_motion_map, Np
 
 
 bool
-block_match::block_match_pipeline(const float* d_source, const float* d_template, int2* d_motion_map,
+block_match::block_match_pipeline(const float* d_source, const float* d_template, float2* d_motion_map,
 									NppiSize src_roi, NppiSize tpl_roi,
 									int src_line_step, int tpl_line_step, PipelineCtx& ctx,
 									int2 no_shift_index, const NccMotionParameters& params)

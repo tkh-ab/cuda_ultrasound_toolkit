@@ -79,6 +79,7 @@ typedef struct NccMotionParameters
 	float rel_cor_threshold;	// Threshold for the peak to be considered valid relative to the value for no motion.
 	float min_patch_variance; 	// Minimum variance of the search patch, if its too flat we won't get a good result
 	uint reference_frame;		// Frame to use as the reference for the computation
+	bool neighbour_compare;     // Each frame is compared with its neighbour in the direction of the reference frame, rather then the reference itself
 	uint frame_count;			// Number of frames in the input data
 	uint image_dims[2];			// [rows, cols] Dimensions of the input images
 	InputDataTypes data_type;   // Image data type, f32 or u8

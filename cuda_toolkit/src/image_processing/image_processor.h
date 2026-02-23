@@ -28,13 +28,8 @@ public:
 	}
 
     bool ncc_block_match( std::vector<PitchedArray<float>>& d_input_images, 
-                            int2* motion_maps, 
+                            float2* motion_maps, 
                             const NccMotionParameters& params);
-
-    bool svd_filter(std::span<const cuComplex> input, 
-                    std::span<cuComplex> output, 
-                    uint2 image_dims, 
-                    std::span<const uint > mask);
 
 
 	uint get_pipeline_count() const
@@ -53,20 +48,12 @@ private:
 		bool 
 		_compare_images(const PitchedArray<float>& template_image,
 							const PitchedArray<float>& source_image,
-							int2* motion_map,
-							uint2 image_dims,
-							const NccMotionParameters& params,
-							uint frame_diff);
-
-		bool 
-		_compare_images_batched(const PitchedArray<float>& template_image,
-							const PitchedArray<float>& source_image,
-							int2* motion_map,
+							float2* motion_map,
 							uint2 image_dims,
 							const NccMotionParameters& params);
 
 		bool
-		_create_pipeline_ctxs(NppiSize src_size, NppiSize tpl_size, uint stream_count);
+		_create_pipeline_ctxs(const NccMotionParameters& params, uint stream_count);
 
 		void
 		_clear_pipeline_contexts()

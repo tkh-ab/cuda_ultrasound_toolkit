@@ -7,54 +7,21 @@
 
 #include "image_processor.h"
 
-
-NppStreamContext 
-ImageProcessor::_create_stream_context(cudaStream_t stream) 
-{
-    NppStreamContext ctx = {};
-
-    int device = -1;
-    cudaGetDevice(&device);  // this always returns the device active in this thread
-
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, device);
-
-    ctx.hStream = stream;
-
-    ctx.nCudaDeviceId = device;
-    ctx.nMultiProcessorCount = props.multiProcessorCount;
-    ctx.nMaxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
-    ctx.nMaxThreadsPerBlock = props.maxThreadsPerBlock;
-
-    ctx.nSharedMemPerBlock = props.sharedMemPerBlock;
-    ctx.nCudaDevAttrComputeCapabilityMajor = props.major;
-    ctx.nCudaDevAttrComputeCapabilityMinor = props.minor;
-
-    return ctx;    
-}
-
 bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_images, 
-										int2* motion_maps, 
+										float2* motion_maps, 
 										const NccMotionParameters& params)
 {
 	constexpr uint stream_count = 8; // Number of streams to use for processing
 
-	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
-	NppiSize tpl_roi = { (int)params.patch_size, (int)params.patch_size };
-	NppiSize src_roi = { tpl_roi.width + (int)search_margins.x * 2 + 1, 
-							tpl_roi.height + (int)search_margins.y * 2 };
-
-
 	size_t motion_map_count = params.motion_grid_dims[0] * params.motion_grid_dims[1];
 	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
-	uint reference_frame = params.reference_frame;
-
-	int2* d_motion_map;
-	size_t motion_map_size = motion_map_count * sizeof(int2) * d_input_images.size();
+	
+	float2* d_motion_map;
+	size_t motion_map_size = motion_map_count * sizeof(float2) * d_input_images.size();
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_motion_map, motion_map_size));
 	CUDA_RETURN_IF_ERROR(cudaMemset(d_motion_map, 0, motion_map_size));
 
-	if (!_create_pipeline_ctxs(src_roi, tpl_roi, stream_count)) return false;
+	if (!_create_pipeline_ctxs(params, stream_count)) return false;
 
 	bool result = false;
 	for( uint i = 0; i < d_input_images.size(); ++i)
@@ -62,14 +29,19 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 		std::cout << "Processing frame " << i + 1<< std::endl;
 
 		auto start = std::chrono::high_resolution_clock::now();
+		uint reference_frame = params.reference_frame;
 		if( i == reference_frame ) continue;
 
-		uint frame_diff = abs((int)i - (int)reference_frame);
+		if (params.neighbour_compare)
+		{
+			if (reference_frame > i) reference_frame = i + 1;
+			else reference_frame = i - 1;
+		}
 
 		PitchedArray<float>* template_image = d_input_images.data() + reference_frame;
 		PitchedArray<float>* source_image = d_input_images.data() + i;
 
-		result &= _compare_images( *template_image, *source_image, d_motion_map + i * motion_map_count, image_dims, params, frame_diff);
+		result &= _compare_images( *template_image, *source_image, d_motion_map + i * motion_map_count, image_dims, params);
 
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed = end - start;
@@ -83,61 +55,15 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 	return result;
 }
 
-
-bool
-ImageProcessor::_create_pipeline_ctxs(NppiSize src_size, NppiSize tpl_size, uint stream_count)
-{
-	_clear_pipeline_contexts();
-	NppiSize valid_corr_dims = { .width = src_size.width - tpl_size.width + 1, 
-							 	 .height = src_size.height - tpl_size.height + 1 };
-
-	size_t valid_corr_size = valid_corr_dims.width * valid_corr_dims.height  * sizeof(float);
-	size_t scratch_buffer_size = 0;
-	NppStatus status = nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(valid_corr_dims, &scratch_buffer_size, _default_stream_context);
-	if (status != NPP_SUCCESS)
-	{
-		std::cerr << "Failed to get buffer size for cross-correlation: " << status << std::endl;
-		return false;
-	}
-
-	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
-
-	_pipeline_contexts.resize(stream_count);
-	for (auto& ctx : _pipeline_contexts)
-	{
-		CUDA_RETURN_IF_ERROR(cudaStreamCreate(&ctx.stream));
-		ctx.stream_context = _create_stream_context(ctx.stream);
-		ctx.scratch_buffer_size = scratch_buffer_size;
-		ctx.corr_map_size = valid_corr_size;
-
-		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_scratch_buffer, scratch_buffer_size));
-		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_corr_map, valid_corr_size));
-	}
-
-
-	return true;
-}
-
-
 bool
 ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
-						int2* d_motion_map, 
+						float2* d_motion_map, 
 						uint2 image_dims, 
-						const NccMotionParameters& params,
-						uint frame_diff)
+						const NccMotionParameters& params)
 {
 	std::chrono::duration<double> corr_duration = std::chrono::duration<double>::zero();
 	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
-
-	if(params.scale_dims[0])
-	{
-		search_margins.x = (int)(search_margins.x * frame_diff);
-	}
-	if(params.scale_dims[1])
-	{
-		search_margins.y = (int)(search_margins.y * frame_diff);
-	}
 
 	uint patch_size = params.patch_size;
 
@@ -196,10 +122,10 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
 										.height = src_roi.height - tpl_roi.height + 1 };
 
-			int corr_line_step = valid_corr_dims.width * sizeof(float);
+			//int corr_line_step = valid_corr_dims.width * sizeof(float);
 			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
 
-			int2* d_motion_point = d_motion_map + i * motion_grid_dims.x + j;
+			float2* d_motion_point = d_motion_map + i * motion_grid_dims.x + j;
 
 			block_match::PipelineCtx& ctx = _pipeline_contexts[stream_index % _pipeline_contexts.size()];
 
@@ -227,3 +153,70 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 	return true;
 	
 }
+
+bool
+ImageProcessor::_create_pipeline_ctxs(const NccMotionParameters& params, uint stream_count)
+{
+	_clear_pipeline_contexts();
+
+	int2 search_margins = { (int)params.search_margins[0], (int)params.search_margins[1] };
+	NppiSize tpl_roi = { (int)params.patch_size, (int)params.patch_size };
+	NppiSize src_roi = { tpl_roi.width + (int)search_margins.x * 2 + 1, 
+							tpl_roi.height + (int)search_margins.y * 2 };
+	NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
+							 	 .height = src_roi.height - tpl_roi.height + 1 };
+
+	size_t valid_corr_size = valid_corr_dims.width * valid_corr_dims.height  * sizeof(float);
+	size_t scratch_buffer_size = 0;
+	NppStatus status = nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(valid_corr_dims, &scratch_buffer_size, _default_stream_context);
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "Failed to get buffer size for cross-correlation: " << status << std::endl;
+		return false;
+	}
+
+	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
+
+	_pipeline_contexts.resize(stream_count);
+	for (auto& ctx : _pipeline_contexts)
+	{
+		CUDA_RETURN_IF_ERROR(cudaStreamCreate(&ctx.stream));
+		ctx.stream_context = _create_stream_context(ctx.stream);
+		ctx.scratch_buffer_size = scratch_buffer_size;
+		ctx.corr_map_size = valid_corr_size;
+
+		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_scratch_buffer, scratch_buffer_size));
+		CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&ctx.d_corr_map, valid_corr_size));
+	}
+
+
+	return true;
+}
+
+NppStreamContext 
+ImageProcessor::_create_stream_context(cudaStream_t stream) 
+{
+    NppStreamContext ctx = {};
+
+    int device = -1;
+    cudaGetDevice(&device);  // this always returns the device active in this thread
+
+    cudaDeviceProp props;
+    cudaGetDeviceProperties(&props, device);
+
+    ctx.hStream = stream;
+
+    ctx.nCudaDeviceId = device;
+    ctx.nMultiProcessorCount = props.multiProcessorCount;
+    ctx.nMaxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+    ctx.nMaxThreadsPerBlock = props.maxThreadsPerBlock;
+
+    ctx.nSharedMemPerBlock = props.sharedMemPerBlock;
+    ctx.nCudaDevAttrComputeCapabilityMajor = props.major;
+    ctx.nCudaDevAttrComputeCapabilityMinor = props.minor;
+
+    return ctx;    
+}
+
+
+
