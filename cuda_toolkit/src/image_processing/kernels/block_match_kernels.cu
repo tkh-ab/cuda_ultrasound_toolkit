@@ -140,9 +140,9 @@ block_match::kernels::test_peaks(const float* d_corr_map, float2* d_motion_map, 
 	sub_pixel_offset.x = CLAMP(sub_pixel_offset.x, -1.0f, 1.0f);
 	sub_pixel_offset.y = CLAMP(sub_pixel_offset.y, -1.0f, 1.0f);
 
-	//float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
+	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
 
-	float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
+	//float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
 
 	// if(calculated_peak < peak)
 	// {
