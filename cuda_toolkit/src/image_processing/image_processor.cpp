@@ -56,6 +56,80 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 }
 
 bool
+ImageProcessor::corr_images(const PitchedArray<float>& d_template_image,
+							const PitchedArray<float>& d_source_image,
+							float* corr_map,
+							uint2 template_dims,
+							uint2 source_dims)
+{
+	if (template_dims.x > source_dims.x || template_dims.y > source_dims.y)
+	{
+		std::cerr << "Template dimensions must be <= source dimensions." << std::endl;
+		return false;
+	}
+
+	NppiSize tpl_roi = { (int)template_dims.x, (int)template_dims.y };
+	NppiSize src_roi = { (int)source_dims.x, (int)source_dims.y };
+	NppiSize valid_corr_dims = {
+		.width = src_roi.width - tpl_roi.width + 1,
+		.height = src_roi.height - tpl_roi.height + 1
+	};
+
+	int tpl_line_step = (int)d_template_image.pitch;
+	int src_line_step = (int)d_source_image.pitch;
+	int corr_line_step = valid_corr_dims.width * (int)sizeof(float);
+
+	size_t corr_bytes = (size_t)valid_corr_dims.width * valid_corr_dims.height * sizeof(float);
+	size_t scratch_buffer_size = 0;
+	NPP_RETURN_IF_ERR(nppiValidNormLevelGetBufferHostSize_32f_C1R_Ctx(
+		valid_corr_dims, &scratch_buffer_size, _default_stream_context));
+	scratch_buffer_size = scratch_buffer_size < Min_Scratch_Buffer_Size ? Min_Scratch_Buffer_Size : scratch_buffer_size;
+
+	float* d_corr_map = nullptr;
+	u8* d_scratch_buffer = nullptr;
+	cudaError_t err = cudaMalloc((void**)&d_corr_map, corr_bytes);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to allocate correlation map buffer: " << cudaGetErrorString(err) << std::endl;
+		return false;
+	}
+	err = cudaMalloc((void**)&d_scratch_buffer, scratch_buffer_size);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to allocate NPP scratch buffer: " << cudaGetErrorString(err) << std::endl;
+		cudaFree(d_corr_map);
+		return false;
+	}
+
+	NppStatus status = nppiCrossCorrValid_NormLevel_32f_C1R_Ctx(
+		d_source_image.data, src_line_step, src_roi,
+		d_template_image.data, tpl_line_step, tpl_roi,
+		d_corr_map, corr_line_step,
+		d_scratch_buffer, _default_stream_context);
+
+	if (status != NPP_SUCCESS)
+	{
+		std::cerr << "NPP error '" << status << "' during full-image cross-correlation." << std::endl;
+		cudaFree(d_scratch_buffer);
+		cudaFree(d_corr_map);
+		return false;
+	}
+
+	err = cudaMemcpy(corr_map, d_corr_map, corr_bytes, cudaMemcpyDeviceToHost);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to copy correlation map to host: " << cudaGetErrorString(err) << std::endl;
+		cudaFree(d_scratch_buffer);
+		cudaFree(d_corr_map);
+		return false;
+	}
+
+	cudaFree(d_scratch_buffer);
+	cudaFree(d_corr_map);
+	return true;
+}
+
+bool
 ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
 						float4* d_motion_map, 
@@ -217,5 +291,3 @@ ImageProcessor::_create_stream_context(cudaStream_t stream)
 
     return ctx;    
 }
-
-

@@ -226,3 +226,90 @@ cuda_toolkit::motion_detection(std::span<const uint8_t> images,
 
 	return result;
 }
+
+bool
+cuda_toolkit::corr_images(std::span<const float> template_image,
+						  std::span<const float> source_image,
+						  std::span<float> corr_map,
+						  const uint template_dims[2],
+						  const uint source_dims[2])
+{
+	uint2 tpl_dims = { template_dims[0], template_dims[1] };
+	uint2 src_dims = { source_dims[0], source_dims[1] };
+
+	if (tpl_dims.x == 0 || tpl_dims.y == 0 || src_dims.x == 0 || src_dims.y == 0)
+	{
+		std::cerr << "Invalid image dimensions for corr_images." << std::endl;
+		return false;
+	}
+	if (tpl_dims.x > src_dims.x || tpl_dims.y > src_dims.y)
+	{
+		std::cerr << "Template dimensions must be <= source dimensions for corr_images." << std::endl;
+		return false;
+	}
+
+	size_t tpl_pixel_count = (size_t)tpl_dims.x * tpl_dims.y;
+	size_t src_pixel_count = (size_t)src_dims.x * src_dims.y;
+	size_t corr_width = (size_t)src_dims.x - tpl_dims.x + 1;
+	size_t corr_height = (size_t)src_dims.y - tpl_dims.y + 1;
+	size_t corr_pixel_count = corr_width * corr_height;
+
+	if (template_image.size() < tpl_pixel_count || source_image.size() < src_pixel_count)
+	{
+		std::cerr << "Input image spans are smaller than the provided dimensions for corr_images." << std::endl;
+		return false;
+	}
+	if (corr_map.size() < corr_pixel_count)
+	{
+		std::cerr << "Output corr_map span is too small for corr_images." << std::endl;
+		return false;
+	}
+
+	float* d_template = nullptr;
+	float* d_source = nullptr;
+	size_t template_pitch = 0;
+	size_t source_pitch = 0;
+
+	cudaError_t err = cudaMallocPitch((void**)&d_template, &template_pitch, tpl_dims.x * sizeof(float), tpl_dims.y);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to allocate template image for corr_images: " << cudaGetErrorString(err) << std::endl;
+		return false;
+	}
+	err = cudaMallocPitch((void**)&d_source, &source_pitch, src_dims.x * sizeof(float), src_dims.y);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to allocate source image for corr_images: " << cudaGetErrorString(err) << std::endl;
+		cudaFree(d_template);
+		return false;
+	}
+
+	err = cudaMemcpy2D(d_template, template_pitch,
+					   template_image.data(), tpl_dims.x * sizeof(float),
+					   tpl_dims.x * sizeof(float), tpl_dims.y,
+					   cudaMemcpyHostToDevice);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to copy template image for corr_images: " << cudaGetErrorString(err) << std::endl;
+		cudaFree(d_source);
+		cudaFree(d_template);
+		return false;
+	}
+	err = cudaMemcpy2D(d_source, source_pitch,
+					   source_image.data(), src_dims.x * sizeof(float),
+					   src_dims.x * sizeof(float), src_dims.y,
+					   cudaMemcpyHostToDevice);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to copy source image for corr_images: " << cudaGetErrorString(err) << std::endl;
+		cudaFree(d_source);
+		cudaFree(d_template);
+		return false;
+	}
+
+	PitchedArray<float> d_template_image(d_template, template_pitch, uint3(tpl_dims.x, tpl_dims.y, 1));
+	PitchedArray<float> d_source_image(d_source, source_pitch, uint3(src_dims.x, src_dims.y, 1));
+
+	auto& image_processor = get_image_processor();
+	return image_processor.corr_images(d_template_image, d_source_image, corr_map.data(), tpl_dims, src_dims);
+}

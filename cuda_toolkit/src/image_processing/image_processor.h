@@ -31,6 +31,12 @@ public:
                             float4* motion_maps, 
                             const NccMotionParameters& params);
 
+	bool corr_images(const PitchedArray<float>& d_template_image,
+					 const PitchedArray<float>& d_source_image,
+					 float* corr_map,
+					 uint2 template_dims,
+					 uint2 source_dims);
+
 
 	uint get_pipeline_count() const
 	{
