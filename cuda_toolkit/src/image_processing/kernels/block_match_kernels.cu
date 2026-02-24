@@ -140,6 +140,8 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	sub_pixel_offset.x = CLAMP(sub_pixel_offset.x, -1.0f, 1.0f);
 	sub_pixel_offset.y = CLAMP(sub_pixel_offset.y, -1.0f, 1.0f);
 
+	bool oor_subpixel = (abs(sub_pixel_offset.x) > 1.0f || abs(sub_pixel_offset.y) > 1.0f);
+
 	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
 
 	//float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
@@ -152,7 +154,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
 
-	if(max_sharpness < min_sharpness || sharpness[0] > 0.0f || sharpness[1] > 0.0f || peak < threshold || peak > 1.0f)
+	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak < threshold || peak > 1.0f || oor_subpixel)
 	{
 		peak = -1.0f;
 	}
@@ -168,6 +170,10 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 		else
 		{
 			total_offset = make_float2(0.0f, 0.0f);
+			if (peak < threshold)
+			{
+				peak = -1.0f; // Mark as invalid
+			}
 		}
 		*d_motion_map = make_float4(total_offset.x, total_offset.y, peak, no_shift_peak);
 	}
