@@ -19,6 +19,11 @@ LIB_FN void beamform_f32(const float* data, CudaBeamformerParameters bp, float* 
 
 LIB_FN void motion_detect_f32(const float* images, NCCMotionParameters params, float* motion_maps);
 
+LIB_FN void corr_images_f32(const float* template_image,
+                            const float* source_image,
+                            CorrImagesParameters params,
+                            float* corr_map);
+
 LIB_FN void deinit();
 
 #ifdef __cplusplus

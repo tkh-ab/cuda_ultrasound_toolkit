@@ -21,6 +21,12 @@ namespace cuda_toolkit
 	EXPORT_FN bool motion_detection(std::span<const uint8_t> images, 
 				  std::span<uint8_t> motion_maps,
 				  const NccMotionParameters& params);
+
+	EXPORT_FN bool corr_images(std::span<const float> template_image,
+				  std::span<const float> source_image,
+				  std::span<float> corr_map,
+				  const uint template_dims[2],
+				  const uint source_dims[2]);
 }
 
 #endif // __cplusplus

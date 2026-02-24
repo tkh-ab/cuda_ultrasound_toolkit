@@ -28,6 +28,7 @@ typedef enum CudaCommand
 	BEAMFORM_VOLUME = 3,
 	SVD_FILTER = 4,
 	NCC_MOTION_DETECT = 5,
+	CORR_IMAGES = 6,
 } CudaCommand;
 
 typedef struct CommandPipeMessage
@@ -43,11 +44,18 @@ typedef struct SVDParameters
 	int filter_indicies[256];	// Singular values to remove
 } SVDParameters;
 
+typedef struct CorrImagesParameters
+{
+	unsigned int template_dims[2];	// [rows, cols]
+	unsigned int source_dims[2];	// [rows, cols]
+} CorrImagesParameters;
+
 typedef struct SharedMemoryParams
 {
 	CudaBeamformerParameters beamformerParameters;
 	SVDParameters svdParameters;
 	NCCMotionParameters nccMotionParameters;
+	CorrImagesParameters corrImagesParameters;
 } SharedMemoryParams;
 
 
@@ -55,4 +63,3 @@ typedef struct SharedMemoryParams
 }   // extern "C"  
 #endif
 #endif // !PARAMETER_DEFS_H
-
