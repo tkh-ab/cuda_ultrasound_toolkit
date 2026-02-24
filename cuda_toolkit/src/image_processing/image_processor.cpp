@@ -8,7 +8,7 @@
 #include "image_processor.h"
 
 bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_images, 
-										float2* motion_maps, 
+										float4* motion_maps, 
 										const NccMotionParameters& params)
 {
 	constexpr uint stream_count = 8; // Number of streams to use for processing
@@ -16,8 +16,8 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 	size_t motion_map_count = params.motion_grid_dims[0] * params.motion_grid_dims[1];
 	uint2 image_dims = { params.image_dims[0], params.image_dims[1] };
 	
-	float2* d_motion_map;
-	size_t motion_map_size = motion_map_count * sizeof(float2) * d_input_images.size();
+	float4* d_motion_map;
+	size_t motion_map_size = motion_map_count * sizeof(float4) * d_input_images.size();
 	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_motion_map, motion_map_size));
 	CUDA_RETURN_IF_ERROR(cudaMemset(d_motion_map, 0, motion_map_size));
 
@@ -58,7 +58,7 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 bool
 ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 						const PitchedArray<float>& source_image,
-						float2* d_motion_map, 
+						float4* d_motion_map, 
 						uint2 image_dims, 
 						const NccMotionParameters& params)
 {
@@ -125,7 +125,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			//int corr_line_step = valid_corr_dims.width * sizeof(float);
 			int2 no_shift_index = {tpl_left_x - src_left_x, tpl_top_y - src_top_y};
 
-			float2* d_motion_point = d_motion_map + i * motion_grid_dims.x + j;
+			float4* d_motion_point = d_motion_map + i * motion_grid_dims.x + j;
 
 			block_match::PipelineCtx& ctx = _pipeline_contexts[stream_index % _pipeline_contexts.size()];
 
@@ -217,6 +217,5 @@ ImageProcessor::_create_stream_context(cudaStream_t stream)
 
     return ctx;    
 }
-
 
 
