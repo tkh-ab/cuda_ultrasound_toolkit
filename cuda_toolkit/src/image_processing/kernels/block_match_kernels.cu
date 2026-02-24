@@ -54,7 +54,7 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, float2* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
+block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
 {
 	
 	// constexpr int2 Patch_Margins = { 2, 2 };
@@ -159,10 +159,17 @@ block_match::kernels::test_peaks(const float* d_corr_map, float2* d_motion_map, 
 
 	warp_reduce_max(&peak, reinterpret_cast<double*>(&total_offset));
 
-	if (threadIdx.x == 0 && peak > abs_threshold)
+	if (threadIdx.x == 0)
 	{
-		total_offset = SUB_V2(total_offset, no_shift_pos);
-		*d_motion_map = total_offset; // Store the peak position in the motion map
+		if (peak > abs_threshold)
+		{
+			total_offset = SUB_V2(total_offset, no_shift_pos);
+		}
+		else
+		{
+			total_offset = make_float2(0.0f, 0.0f);
+		}
+		*d_motion_map = make_float4(total_offset.x, total_offset.y, peak, no_shift_peak);
 	}
 	return;
 
@@ -172,7 +179,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, float2* d_motion_map, 
 
 
 bool
-block_match::block_match_pipeline(const float* d_source, const float* d_template, float2* d_motion_map,
+block_match::block_match_pipeline(const float* d_source, const float* d_template, float4* d_motion_map,
 									NppiSize src_roi, NppiSize tpl_roi,
 									int src_line_step, int tpl_line_step, PipelineCtx& ctx,
 									int2 no_shift_index, const NccMotionParameters& params)

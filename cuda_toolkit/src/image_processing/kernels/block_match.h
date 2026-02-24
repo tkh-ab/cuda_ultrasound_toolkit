@@ -20,7 +20,7 @@ namespace block_match
 	};
 
 	__host__ bool
-	block_match_pipeline(const float* d_source, const float* d_template, float2* d_motion_map,
+	block_match_pipeline(const float* d_source, const float* d_template, float4* d_motion_map,
 						 NppiSize src_roi, NppiSize tpl_roi,
 						 int src_line_step, int tpl_line_step, PipelineCtx& ctx,
 						 int2 no_shift_index, const NccMotionParameters& params);

@@ -28,7 +28,7 @@ public:
 	}
 
     bool ncc_block_match( std::vector<PitchedArray<float>>& d_input_images, 
-                            float2* motion_maps, 
+                            float4* motion_maps, 
                             const NccMotionParameters& params);
 
 
@@ -48,7 +48,7 @@ private:
 		bool 
 		_compare_images(const PitchedArray<float>& template_image,
 							const PitchedArray<float>& source_image,
-							float2* motion_map,
+							float4* motion_map,
 							uint2 image_dims,
 							const NccMotionParameters& params);
 
