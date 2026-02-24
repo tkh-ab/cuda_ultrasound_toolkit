@@ -103,16 +103,16 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	
 	// Generate the polynomial fit 
 	float coeff[6] = { 0.0f };
-	//#pragma unroll
+	#pragma unroll
 	for(int i = 0; i < 6; i++)
 	{
 		float sum = 0.0f;
-		//#pragma unroll
+		#pragma unroll
 		for(int j = 0; j < Total_Samples; j++)
 		{
-			coeff[i] += P3[i * Total_Samples + j] * values[j];
+			sum += P3[i * Total_Samples + j] * values[j];
 		}
-		//coeff[i] = sum;
+		coeff[i] = sum;
 	}
 
 	float sharpness[2] = { 0.0f, 0.0f };
@@ -143,18 +143,13 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	bool oor_subpixel = (abs(sub_pixel_offset.x) > 1.0f || abs(sub_pixel_offset.y) > 1.0f);
 
 	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
-
+	//float2 total_offset = sub_pixel_offset;
 	//float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
 
-	// if(calculated_peak < peak)
-	// {
-	// 	printf("Calculated peak %f < peak %f at position (%d, %d)\n", calculated_peak, peak, peak_pos.x, peak_pos.y);
-	// }
-	//peak = calculated_peak;
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
 
-	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak < threshold || peak > 1.0f || oor_subpixel)
+	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak < threshold || peak > 1.0f)
 	{
 		peak = -1.0f;
 	}
