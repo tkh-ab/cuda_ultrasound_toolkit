@@ -296,6 +296,77 @@ _motion_detect(const void* images, size_t data_size,
 	memcpy(motion_maps, g_data, output_size);
 }
 
+static void
+_corr_images(const float* template_image,
+			 const float* source_image,
+			 const CorrImagesParameters* params,
+			 float* corr_map)
+{
+	if (params->template_dims[0] == 0 || params->template_dims[1] == 0 ||
+		params->source_dims[0] == 0 || params->source_dims[1] == 0)
+	{
+		error_msg("Invalid corr_images dimensions");
+		return;
+	}
+	if (params->template_dims[0] > params->source_dims[0] ||
+		params->template_dims[1] > params->source_dims[1])
+	{
+		error_msg("Template dimensions must be <= source dimensions");
+		return;
+	}
+
+	size_t template_size = (size_t)params->template_dims[0] * params->template_dims[1] * sizeof(float);
+	size_t source_size = (size_t)params->source_dims[0] * params->source_dims[1] * sizeof(float);
+	size_t data_size = template_size + source_size;
+	size_t corr_width = (size_t)params->source_dims[0] - params->template_dims[0] + 1;
+	size_t corr_height = (size_t)params->source_dims[1] - params->template_dims[1] + 1;
+	size_t expected_output_size = corr_width * corr_height * sizeof(float);
+	if (data_size > DATA_SMEM_SIZE)
+	{
+		error_msg("Data size too large: %zu, Max: %lu", data_size, DATA_SMEM_SIZE);
+		return;
+	}
+	if (!setup_shared_resources())
+	{
+		error_msg("Failed to setup shared resources");
+		return;
+	}
+
+	memcpy(&(g_params->corrImagesParameters), params, sizeof(CorrImagesParameters));
+	memcpy(g_data, template_image, template_size);
+	memcpy((char*)g_data + template_size, source_image, source_size);
+
+	if (!send_command(CORR_IMAGES, data_size))
+	{
+		_cleanup_shared_resources();
+		error_msg("Failed to send command to CUDA server");
+		return;
+	}
+	if (!wait_for_ack())
+	{
+		_cleanup_shared_resources();
+		error_msg("Failed to receive ack from CUDA server");
+		return;
+	}
+
+	CommandPipeMessage result = wait_for_result();
+	if (result.opcode == ERR)
+	{
+		error_msg("Failed to receive valid result from CUDA server");
+		_cleanup_shared_resources();
+		return;
+	}
+
+	size_t output_size = result.data_size;
+	if (output_size != expected_output_size)
+	{
+		error_msg("Unexpected corr_map size from server: %zu != %zu", output_size, expected_output_size);
+		_cleanup_shared_resources();
+		return;
+	}
+	memcpy(corr_map, g_data, output_size);
+}
+
 static void 
 _beamform(const void* data, size_t data_size,
               const CudaBeamformerParameters* bp, float* output)
@@ -366,6 +437,15 @@ motion_detect_f32(const float* images, NCCMotionParameters params, float* motion
 }
 
 void
+corr_images_f32(const float* template_image,
+				const float* source_image,
+				CorrImagesParameters params,
+				float* corr_map)
+{
+	_corr_images(template_image, source_image, &params, corr_map);
+}
+
+void
 deinit()
 {
     _cleanup_shared_resources();
@@ -385,5 +465,3 @@ DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
     }
     return TRUE;
 }
-
-

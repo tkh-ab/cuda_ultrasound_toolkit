@@ -74,6 +74,12 @@ TestApp::_message_loop()
 					throw std::runtime_error("Error handling motion detection command");
 				break;
 
+			case CudaCommand::CORR_IMAGES:
+				std::cout << "Corr images command." << std::endl;
+				if(!_handle_corr_images_command(command))
+					throw std::runtime_error("Error handling corr images command");
+				break;
+
 			case CudaCommand::ACK:
 				std::cout << "Acknowledged command." << std::endl;
 				break;
@@ -201,6 +207,95 @@ TestApp::_handle_motion_detection_command(const CommandPipeMessage& command)
 	if (!_transfer_server->respond_success((u32)motion_map_size))
 	{
 		std::cerr << "Error: Failed to respond with success." << std::endl;
+		return false;
+	}
+
+	std::free(output_data);
+	return true;
+}
+
+bool
+TestApp::_handle_corr_images_command(const CommandPipeMessage& command)
+{
+	const CorrImagesParameters* params = &((_transfer_server->get_parameters_smem())->corrImagesParameters);
+	size_t data_size = command.data_size;
+	auto data_buffer = _transfer_server->get_data_smem();
+	if (data_buffer.empty())
+	{
+		std::cerr << "Error: Data buffer not set." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	uint template_rows = params->template_dims[0];
+	uint template_cols = params->template_dims[1];
+	uint source_rows = params->source_dims[0];
+	uint source_cols = params->source_dims[1];
+	if (template_rows == 0 || template_cols == 0 || source_rows == 0 || source_cols == 0)
+	{
+		std::cerr << "Error: Invalid corr_images dimensions." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+	if (template_rows > source_rows || template_cols > source_cols)
+	{
+		std::cerr << "Error: Template dimensions must be <= source dimensions." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	size_t template_size = (size_t)template_rows * template_cols * sizeof(float);
+	size_t source_size = (size_t)source_rows * source_cols * sizeof(float);
+	size_t expected_input_size = template_size + source_size;
+	if (data_size != expected_input_size)
+	{
+		std::cerr << "Error: Input data size does not match corr_images dimensions." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	size_t corr_width = (size_t)source_rows - template_rows + 1;
+	size_t corr_height = (size_t)source_cols - template_cols + 1;
+	size_t corr_map_size = corr_width * corr_height * sizeof(float);
+	if (corr_map_size > _transfer_server->get_data_smem().size())
+	{
+		std::cerr << "Error: Output size exceeds shared memory size." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	_transfer_server->respond_ack();
+
+	const float* template_image = reinterpret_cast<const float*>(data_buffer.data());
+	const float* source_image = reinterpret_cast<const float*>(data_buffer.data() + template_size);
+	float* output_data = (float*)std::calloc(corr_width * corr_height, sizeof(float));
+	if (!output_data)
+	{
+		std::cerr << "Error: Failed to allocate output buffer." << std::endl;
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	bool result = cuda_toolkit::corr_images(
+		std::span<const float>(template_image, template_size / sizeof(float)),
+		std::span<const float>(source_image, source_size / sizeof(float)),
+		std::span<float>(output_data, corr_width * corr_height),
+		params->template_dims,
+		params->source_dims);
+
+	if (!result)
+	{
+		std::cerr << "Error: corr_images failed." << std::endl;
+		std::free(output_data);
+		_transfer_server->respond_error();
+		return false;
+	}
+
+	_transfer_server->write_output_data(std::span<const u8>((const u8*)output_data, corr_map_size));
+	if (!_transfer_server->respond_success((u32)corr_map_size))
+	{
+		std::cerr << "Error: Failed to respond with success." << std::endl;
+		std::free(output_data);
 		return false;
 	}
 
