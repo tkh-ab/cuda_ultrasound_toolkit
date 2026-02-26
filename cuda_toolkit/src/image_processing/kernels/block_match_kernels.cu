@@ -5,7 +5,9 @@
 
 // Single block of 256 threads, each thread processes 8 values
 __global__ void
-block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float* peak_values, int2* peak_positions, uint peak_count)
+block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, 
+										float* peak_values, int2* peak_positions, uint peak_count, 
+										int2 no_shift_pos, float rel_threshold, uint2 vector_id)
 {
 	static constexpr uint Vals_Per_Thread = 8;
 	static constexpr uint Threads_Per_Block = 256;
@@ -21,21 +23,27 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 	float values[Vals_Per_Thread];
 	int indicies[Vals_Per_Thread];
 
+	float no_shift_peak = d_corr_map[no_shift_pos.y * line_step + no_shift_pos.x];
+
+	float2 corner_shift = SUB_V2(make_float2(dims.width -1, dims.height -1), no_shift_pos);
+	float2 max_shift2 = make_float2(fmaxf(corner_shift.x, no_shift_pos.x), fmaxf(corner_shift.y, no_shift_pos.y));
+	float max_shift = NORM_F2(max_shift2);
+
+	BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
 	for (int i = 0; i < Vals_Per_Thread; i++)
 	{
-		indicies[i] = i + threadIdx.x * Vals_Per_Thread;
+		int index = i + threadIdx.x * Vals_Per_Thread;
+		indicies[i] = index;
+		float2 peak_posf = { (float)(index % dims.width), (float)(index / dims.width) };
+		float norm_offset = (NORM_F2(peak_posf) /(2 * max_shift)) + 1.0f;
+
+		float threshold = no_shift_peak * rel_threshold / norm_offset;
+		values[i] /= norm_offset;
+		if (values[i] < threshold)
+		{
+			values[i] = -2.0f; // Mark as invalid
+		}
 	}
-
-    BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
-
-	// for (int i = 0; i < Vals_Per_Thread; i++)
-	// {
-	// 	if (values[i] > 1.0f)
-	// 	{
-	// 		values[i] = -1.0f;
-	// 	}
-	// }
-
 
 	__syncthreads();
 
@@ -44,8 +52,8 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 	if (threadIdx.x < PEAK_CANDIDATE_COUNT)
 	{
-		peak_values[threadIdx.x] = values[0];
 		int2 peak_pos = { indicies[threadIdx.x] % dims.width, indicies[threadIdx.x] / dims.width };
+		peak_values[threadIdx.x] = values[0];
 		peak_positions[threadIdx.x] = peak_pos;
 	}
 
@@ -54,7 +62,9 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 
 
 __global__ void
-block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, float min_sharpness,  float rel_threshold, float abs_threshold)
+block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, 
+								int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, 
+								float min_sharpness,  float rel_threshold, float abs_threshold, uint2 vector_id	)
 {
 	
 	// constexpr int2 Patch_Margins = { 2, 2 };
@@ -142,27 +152,25 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 
 	bool oor_subpixel = (abs(sub_pixel_offset.x) > 1.0f || abs(sub_pixel_offset.y) > 1.0f);
 
-	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
+	//float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
 	//float2 total_offset = sub_pixel_offset;
-	//float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
+	float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
+
+	total_offset = SUB_V2(total_offset, no_shift_pos);
 
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
-
-	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak < threshold || peak > 1.0f)
+	
+	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak > 1.0f)
 	{
-		peak = -1.0f;
+		peak = -2.0f;
 	}
 
 	warp_reduce_max(&peak, reinterpret_cast<double*>(&total_offset));
 
 	if (threadIdx.x == 0)
 	{
-		if (peak > abs_threshold)
-		{
-			total_offset = SUB_V2(total_offset, no_shift_pos);
-		}
-		else
+		if (peak < abs_threshold)
 		{
 			total_offset = make_float2(0.0f, 0.0f);
 			if (peak < threshold)
@@ -183,7 +191,7 @@ bool
 block_match::block_match_pipeline(const float* d_source, const float* d_template, float4* d_motion_map,
 									NppiSize src_roi, NppiSize tpl_roi,
 									int src_line_step, int tpl_line_step, PipelineCtx& ctx,
-									int2 no_shift_index, const NccMotionParameters& params)
+									int2 no_shift_index, const NccMotionParameters& params, uint2 vector_id)
 {
 	NppiSize valid_corr_dims = { .width = src_roi.width - tpl_roi.width + 1, 
 										.height = src_roi.height - tpl_roi.height + 1 };
@@ -216,14 +224,16 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 
 	dim3 find_peaks_grid = { 1, 1, 1 };
 	dim3 find_peaks_block = { 256, 1, 1 };
-	kernels::find_peaks_kernel<<<find_peaks_grid, find_peaks_block, 0, ctx.stream>>>(ctx.d_corr_map, valid_corr_dims, row_pitch, d_peak_values, d_peak_positions, total_peaks);
+	kernels::find_peaks_kernel<<<find_peaks_grid, find_peaks_block, 0, ctx.stream>>>(
+								ctx.d_corr_map, valid_corr_dims, row_pitch, d_peak_values, d_peak_positions, 
+								total_peaks, no_shift_index, params.rel_cor_threshold, vector_id);
 
 	dim3 test_peaks_grid = { 1, 1, 1 };
 	dim3 test_peaks_block = { WARP_SIZE, 1, 1 };
 	kernels::test_peaks<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(
 							ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, 
 							d_peak_positions, d_peak_values, no_shift_index,
-							params.min_patch_variance, params.rel_cor_threshold, params.abs_cor_threshold);
+							params.min_patch_variance, params.rel_cor_threshold, params.abs_cor_threshold, vector_id);
 	
 	return true;
 }
