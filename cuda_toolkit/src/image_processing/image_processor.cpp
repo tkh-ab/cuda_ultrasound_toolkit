@@ -202,10 +202,10 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			float4* d_motion_point = d_motion_map + i * motion_grid_dims.x + j;
 
 			block_match::PipelineCtx& ctx = _pipeline_contexts[stream_index % _pipeline_contexts.size()];
-
+			uint2 vector_id = { j, i };
 			block_match::block_match_pipeline(source_corner, template_corner, d_motion_point,
 									src_roi, tpl_roi, source_line_step, template_line_step, ctx,
-									no_shift_index, params);
+									no_shift_index, params,vector_id);
 			
 
 		}
