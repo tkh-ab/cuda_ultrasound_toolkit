@@ -35,10 +35,11 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 		int index = i + threadIdx.x * Vals_Per_Thread;
 		indicies[i] = index;
 		float2 peak_posf = { (float)(index % dims.width), (float)(index / dims.width) };
-		float norm_offset = (NORM_F2(peak_posf) /(2 * max_shift)) + 1.0f;
+		peak_posf = SUB_V2(peak_posf, no_shift_pos);
+		float norm_offset = (NORM_F2(peak_posf) /(max_shift));
 
-		float threshold = no_shift_peak * rel_threshold / norm_offset;
-		values[i] /= norm_offset;
+		// Apply the threshold more the further from center, this means that a longer motion vector needs a stronger peak
+		float threshold = no_shift_peak * (1.0f + rel_threshold * norm_offset * norm_offset);
 		if (values[i] < threshold)
 		{
 			values[i] = -2.0f; // Mark as invalid
@@ -46,13 +47,12 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 	}
 
 	__syncthreads();
-
 	BlockRadixSort(sort_storage).SortDescendingBlockedToStriped(values, indicies);
 	__syncthreads();
 
 	if (threadIdx.x < PEAK_CANDIDATE_COUNT)
 	{
-		int2 peak_pos = { indicies[threadIdx.x] % dims.width, indicies[threadIdx.x] / dims.width };
+		int2 peak_pos = { indicies[0] % dims.width, indicies[0] / dims.width };
 		peak_values[threadIdx.x] = values[0];
 		peak_positions[threadIdx.x] = peak_pos;
 	}
@@ -64,7 +64,7 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 __global__ void
 block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, 
 								int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, 
-								float min_sharpness,  float rel_threshold, float abs_threshold, uint2 vector_id	)
+								float sharpness_threshold,  float rel_threshold, float abs_threshold, uint2 vector_id	)
 {
 	
 	// constexpr int2 Patch_Margins = { 2, 2 };
@@ -75,12 +75,11 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	constexpr int Patch_Width = Patch_Margins.x * 2 + 1;
 	constexpr int Total_Samples = 9; // 5x5 polynomial fit
 
-
-	int peak_id = threadIdx.x;
-	
+	int peak_id = threadIdx.x;	
 
 	int2 peak_pos = peak_positions[peak_id];
 	int peak_offset = peak_pos.y * line_step + peak_pos.x;
+	float peak = peak_values[peak_id]; // Center value of the patch
 
 	int no_shift_offset = no_shift_pos.y * line_step + no_shift_pos.x;
 
@@ -110,7 +109,6 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 		}
 	}
 
-	
 	// Generate the polynomial fit 
 	float coeff[6] = { 0.0f };
 	#pragma unroll
@@ -133,10 +131,9 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	sharpness[0] = coeff[0] + coeff[1] + root;
 	sharpness[1] = coeff[0] + coeff[1] - root;
 
-	float max_sharpness = fmaxf(abs(sharpness[0]),abs(sharpness[1]));
+	float minimum_sharpness = fminf(abs(sharpness[0]),abs(sharpness[1]));
 
 	//float width = sqrt( coeff[5] / (max_sharpness * 0.5f) );
-	float peak = values[4]; // Center value of the patch
 	float calculated_peak = coeff[5];
 
 	float denominator = coeff[2] * coeff[2] - 4 * coeff[1] * coeff[0];
@@ -152,16 +149,16 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 
 	bool oor_subpixel = (abs(sub_pixel_offset.x) > 1.0f || abs(sub_pixel_offset.y) > 1.0f);
 
-	//float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
+	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
 	//float2 total_offset = sub_pixel_offset;
-	float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
+	//float2 total_offset = make_float2(peak_pos.x, peak_pos.y);
 
 	total_offset = SUB_V2(total_offset, no_shift_pos);
 
 	float no_shift_peak = d_corr_map[no_shift_offset];
 	float threshold = abs(no_shift_peak) * rel_threshold;
 	
-	if(max_sharpness < min_sharpness || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak > 1.0f)
+	if(minimum_sharpness < sharpness_threshold || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak > 1.0f)
 	{
 		peak = -2.0f;
 	}
@@ -237,3 +234,4 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	
 	return true;
 }
+ 

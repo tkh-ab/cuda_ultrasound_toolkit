@@ -178,7 +178,7 @@ ImageProcessor::_compare_images(const PitchedArray<float>& template_image,
 			// +1 Ensures the valid correlation output has even width for best NCC performance.
 			// There's still a performance hit on the edges but its an improvement.
 			int src_left_x = tpl_left_x - search_margins.x; 
-			int src_right_x = tpl_right_x + search_margins.x + 1;
+			int src_right_x = tpl_right_x + search_margins.x;
 
 			tpl_left_x = max(tpl_left_x, 0);
 			tpl_right_x = min(tpl_right_x, (int)image_dims.x - 1);
