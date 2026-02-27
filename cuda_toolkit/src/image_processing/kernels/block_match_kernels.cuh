@@ -48,14 +48,15 @@ namespace kernels {
 
 		// Each warp takes a 8x4 block and returns the peak position and value 
 	__global__ void
-	find_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float* peak_values, int2* peak_positions, uint peak_count, int2 no_shift_pos, float rel_threshold, uint2 vector_id);
+	find_peaks_kernel(const float* d_corr_map, NppiSize dims, int line_step, float* peak_values, 
+				int2* peak_positions, uint peak_count, int2 no_shift_pos, float rel_threshold, uint2 vector_id);
 
 
 	// Test the prominance and sharpness of the peaks, set any that fail to zero.
 	__global__ void
 	test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, int corr_line_step, 
 			   int2 * peak_positions, float* peak_values, int2 no_shift_pos,
-			   float min_sharpness, float rel_threshold, float abs_threshold, uint2 vector_id);
+			   float sharpness_threshold, float rel_threshold, float abs_threshold, uint2 vector_id);
 
 
 
