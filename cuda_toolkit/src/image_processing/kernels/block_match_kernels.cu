@@ -64,7 +64,8 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 __global__ void
 block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, 
 								int line_step, int2* peak_positions, float* peak_values, int2 no_shift_pos, 
-								float sharpness_threshold,  float rel_threshold, float abs_threshold, uint2 vector_id	)
+								float sharpness_threshold,  float rel_threshold, float abs_threshold, 
+								bool use_subpixel, uint2 vector_id)
 {
 	
 	// constexpr int2 Patch_Margins = { 2, 2 };
@@ -143,11 +144,8 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 		sub_pixel_offset.x = (2 * coeff[1] * coeff[3] - coeff[2] * coeff[4]) / denominator;
 		sub_pixel_offset.y = (2 * coeff[0] * coeff[4] - coeff[2] * coeff[3]) / denominator;
 	}
-
-	sub_pixel_offset.x = CLAMP(sub_pixel_offset.x, -1.0f, 1.0f);
-	sub_pixel_offset.y = CLAMP(sub_pixel_offset.y, -1.0f, 1.0f);
-
-	bool oor_subpixel = (abs(sub_pixel_offset.x) > 1.0f || abs(sub_pixel_offset.y) > 1.0f);
+	sub_pixel_offset.x = CLAMP(sub_pixel_offset.x, -1.0f, 1.0f) * use_subpixel;
+	sub_pixel_offset.y = CLAMP(sub_pixel_offset.y, -1.0f, 1.0f) * use_subpixel;
 
 	float2 total_offset = ADD_V2(sub_pixel_offset, make_float2(peak_pos.x, peak_pos.y));
 	//float2 total_offset = sub_pixel_offset;
@@ -230,7 +228,8 @@ block_match::block_match_pipeline(const float* d_source, const float* d_template
 	kernels::test_peaks<<<test_peaks_grid, test_peaks_block, 0, ctx.stream>>>(
 							ctx.d_corr_map, d_motion_map, valid_corr_dims, row_pitch, 
 							d_peak_positions, d_peak_values, no_shift_index,
-							params.min_patch_variance, params.rel_cor_threshold, params.abs_cor_threshold, vector_id);
+							params.min_patch_variance, params.rel_cor_threshold, params.abs_cor_threshold,
+							params.use_subpixel, vector_id);
 	
 	return true;
 }

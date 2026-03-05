@@ -56,7 +56,7 @@ namespace kernels {
 	__global__ void
 	test_peaks(const float* d_corr_map, float4* d_motion_map, NppiSize dims, int corr_line_step, 
 			   int2 * peak_positions, float* peak_values, int2 no_shift_pos,
-			   float sharpness_threshold, float rel_threshold, float abs_threshold, uint2 vector_id);
+			   float sharpness_threshold, float rel_threshold, float abs_threshold, bool use_subpixel, uint2 vector_id);
 
 
 
