@@ -30,20 +30,23 @@ block_match::kernels::find_peaks_kernel(const float* d_corr_map, NppiSize dims, 
 	float max_shift = NORM_F2(max_shift2);
 
 	BlockLoad(load_storage).Load(d_corr_map, values, total_values, -1.0f);
+
+	// Dynamically scales up the relative threshold from 0 to the set value as the distance from the center increases
+	// Right now this is hardcoded to scale with normallized dist.^2, this should be changed to something more flexible.
 	for (int i = 0; i < Vals_Per_Thread; i++)
 	{
 		int index = i + threadIdx.x * Vals_Per_Thread;
 		indicies[i] = index;
-		float2 peak_posf = { (float)(index % dims.width), (float)(index / dims.width) };
-		peak_posf = SUB_V2(peak_posf, no_shift_pos);
-		float norm_offset = (NORM_F2(peak_posf) /(max_shift));
+		// float2 peak_posf = { (float)(index % dims.width), (float)(index / dims.width) };
+		// peak_posf = SUB_V2(peak_posf, no_shift_pos);
+		// float norm_offset = (NORM_F2(peak_posf) /(max_shift));
 
-		// Apply the threshold more the further from center, this means that a longer motion vector needs a stronger peak
-		float threshold = no_shift_peak * (1.0f + rel_threshold * norm_offset * norm_offset);
-		if (values[i] < threshold)
-		{
-			values[i] = -2.0f; // Mark as invalid
-		}
+		// // Apply the threshold more the further from center, this means that a longer motion vector needs a stronger peak
+		// float threshold = no_shift_peak * (1.0f + rel_threshold * norm_offset * norm_offset);
+		// if (values[i] < threshold)
+		// {
+		// 	values[i] = -2.0f; // Mark as invalid
+		// }
 	}
 
 	__syncthreads();
@@ -154,9 +157,11 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 	total_offset = SUB_V2(total_offset, no_shift_pos);
 
 	float no_shift_peak = d_corr_map[no_shift_offset];
-	float threshold = abs(no_shift_peak) * rel_threshold;
+	float threshold = no_shift_peak * (1.0f + rel_threshold);
 	
-	if(minimum_sharpness < sharpness_threshold || sharpness[0] >= 0.0f || sharpness[1] >= 0.0f || peak > 1.0f)
+	// Because root is always positive, sharpness[0] is always the largest, so only check
+	// if its over 0. 
+	if(minimum_sharpness < sharpness_threshold || sharpness[0] >= 0.0f || peak > 1.0f || peak < threshold )
 	{
 		peak = -2.0f;
 	}
@@ -165,7 +170,7 @@ block_match::kernels::test_peaks(const float* d_corr_map, float4* d_motion_map, 
 
 	if (threadIdx.x == 0)
 	{
-		if (peak < abs_threshold)
+		if (peak < abs_threshold || peak <= no_shift_peak)
 		{
 			total_offset = make_float2(0.0f, 0.0f);
 			if (peak < threshold)
