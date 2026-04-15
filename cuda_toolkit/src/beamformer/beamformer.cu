@@ -313,6 +313,10 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
 					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
 	auto start = std::chrono::high_resolution_clock::now();
 	u64 compact_hadamard_row = 0;
+
+	size_t vol_size = vox_counts.x * vox_counts.y * vox_counts.z * sizeof(cuComplex);
+	CUDA_RETURN_IF_ERROR(cudaMemset(d_volume, 0x00, vol_size));
+
 	std::cout << "Using apo: " << _constants.apo_type << std::endl;
 	// Todo: make a better dispatcher
 	if(_constants.readi_group_count > 1)
@@ -327,7 +331,7 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
         //d_hadamard_row += _constants.readi_group_id * _constants.readi_group_count;
 		for(int i = 0; i < _constants.readi_group_count; i++)
 		{
-			compact_hadamard_row |= (hadamard_row[i] >> 31) << i;
+			compact_hadamard_row |= (u64)(hadamard_row[i] >> 31) << i;
 		}
 		free(hadamard_row);
 
