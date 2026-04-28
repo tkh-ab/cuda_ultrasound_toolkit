@@ -81,8 +81,8 @@ namespace rf_fft
     HilbertHandler::_filter_and_scale(cuComplex* d_data)
     {
         uint sample_count = _fft_dims.x;
-        uint cutoff = sample_count / 2 + 1;
-		uint grid_length = (cutoff + MAX_THREADS_PER_BLOCK - 1) / MAX_THREADS_PER_BLOCK; // Divide and round up
+        uint cutoff = sample_count / 2;
+		uint grid_length = (cutoff + MAX_THREADS_PER_BLOCK) / MAX_THREADS_PER_BLOCK; // Divide and round up
         uint channel_count = _fft_dims.y;
 
         // Grid dim y and z cant be bigger than 2^16 - 1, so we put channel count in X as it could pass that

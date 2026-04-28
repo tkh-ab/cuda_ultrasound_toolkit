@@ -312,6 +312,8 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 					size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * t_signal + Beamformer_Constants.sample_count * c;
 					
+
+					//cuComplex value = rf_data[channel_offset + (int)roundf(scan_index)];
 					//cuComplex value = utils::lerp_read(scan_index, rf_data + channel_offset);	
 					cuComplex value = utils::fast_cubic_spline(scan_index, rf_data + channel_offset);					
 
@@ -329,7 +331,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					//tests
 					total.x = fmaf(signed_apo, value.x, total.x);
 					total.y = fmaf(signed_apo, value.y, total.y);
-					incoherent_sum += NORM_SQUARE_V2(value);
+					incoherent_sum += NORM_SQUARE_V2(value) * apo * apo;
 					
 					tx_vec.x -= Beamformer_Constants.pitches.x;
 					tx_pos += Beamformer_Constants.pitches.x;
