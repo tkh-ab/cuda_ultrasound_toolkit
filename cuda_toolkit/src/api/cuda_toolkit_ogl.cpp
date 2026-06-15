@@ -237,6 +237,9 @@ cuda_decode(size_t input_offset, uint output_buffer_idx)
 bool
 cuda_hilbert(uint input_buffer_idx, uint output_buffer_idx)
 {
+
+
+	std::cerr << "cuda_hilbert called with input_buffer_idx=" << input_buffer_idx << " and output_buffer_idx=" << output_buffer_idx << std::endl;
     GraphicsSession& graphics_session = get_session_();
 
     if (!graphics_session.buffers_init)
