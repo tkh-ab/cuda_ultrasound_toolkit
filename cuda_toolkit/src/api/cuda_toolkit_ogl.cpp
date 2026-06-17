@@ -105,6 +105,8 @@ unregister_ogl_buffers_()
 bool
 init_cuda_configuration(const uint* input_dims, const uint* decoded_dims)
 {
+	std::cerr << "\n[CUDA]Initializing CUDA configuration with input_dims=[" << input_dims[0] << ", " << input_dims[1] << "] and decoded_dims=[" 
+			  << decoded_dims[0] << ", " << decoded_dims[1] << ", " << decoded_dims[2] << "]" << std::endl << std::endl;
     RfProcessor& rf_processor = get_session_().rf_processor;
 
     if (!rf_processor.init({input_dims[0], input_dims[1]}, {decoded_dims[0], decoded_dims[1], decoded_dims[2]}))
