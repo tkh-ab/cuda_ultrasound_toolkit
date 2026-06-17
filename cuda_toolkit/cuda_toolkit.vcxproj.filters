@@ -33,6 +33,9 @@
     <ClCompile Include="src\image_processing\image_processor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\api\cuda_toolkit_vk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\defs.h">
@@ -80,6 +83,9 @@
     <ClInclude Include="src\image_processing\kernels\block_match.h" />
     <ClInclude Include="src\image_processing\kernels\block_match_kernels.cuh" />
     <ClInclude Include="src\beamformer\kernels\templated_beamformer.cuh" />
+    <ClInclude Include="src\public\cuda_toolkit_vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\beamformer\beamformer.cu" />

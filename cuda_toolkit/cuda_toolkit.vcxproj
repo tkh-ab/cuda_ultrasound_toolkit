@@ -241,6 +241,7 @@ IF %ERRORLEVEL% LEQ 1 (
   <ItemGroup>
     <ClCompile Include="src\api\cuda_toolkit.cpp" />
     <ClCompile Include="src\api\cuda_toolkit_ogl.cpp" />
+    <ClCompile Include="src\api\cuda_toolkit_vk.cpp" />
     <ClCompile Include="src\api\dllmain.cpp" />
     <ClCompile Include="src\image_processing\image_processor.cpp" />
     <ClCompile Include="src\rf_processing\hadamard\hadamard_decoder.cpp" />
@@ -261,6 +262,7 @@ IF %ERRORLEVEL% LEQ 1 (
     <ClInclude Include="src\public\cuda_toolkit_ogl.h" />
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\image_processing\image_processor.h" />
+    <ClInclude Include="src\public\cuda_toolkit_vk.h" />
     <ClInclude Include="src\rf_processing\data_conversion\data_conversion_kernels.cuh" />
     <ClInclude Include="src\rf_processing\data_conversion\data_converter.h" />
     <ClInclude Include="src\rf_processing\hadamard\hadamard_decoder.h" />
