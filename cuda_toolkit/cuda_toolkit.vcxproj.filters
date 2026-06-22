@@ -21,9 +21,6 @@
     <ClCompile Include="src\api\cuda_toolkit.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\api\cuda_toolkit_ogl.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\rf_processing\rf_processor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -51,9 +48,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\public\cuda_toolkit.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\public\cuda_toolkit_ogl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\beamformer\beamformer.h">

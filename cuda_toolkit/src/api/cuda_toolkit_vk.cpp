@@ -4,22 +4,20 @@
 
 #define MAX_BUFFER_COUNT 16
 
-bool unregister_ogl_buffers_();
+bool unregister_vk_buffers_();
 
 struct GraphicsSession 
 {
     RfProcessor rf_processor;
-    std::pair<uint, cudaGraphicsResource_t> ogl_raw_buffer;
-    std::array<std::pair<uint, cudaGraphicsResource_t>, MAX_BUFFER_COUNT> ogl_rf_buffers;
+    std::pair<HANDLE, size_t> ping_pong_memory{nullptr, 0};
+	uint ping_pong_count = 0;
+	uint ping_pong_buffer_size = 0;
+	std::array<void*, MAX_BUFFER_COUNT> mapped_ping_pong_buffers{nullptr};
     bool buffers_init = false;
 
-    GraphicsSession() : ogl_raw_buffer({0, nullptr}), buffers_init(false)
-    {
-        ogl_rf_buffers.fill({0, nullptr});
-    }
     ~GraphicsSession()
     {
-        unregister_ogl_buffers_();
+        unregister_vk_buffers_();
     }
 }; 
 
@@ -62,40 +60,10 @@ unmap_ogl_buffer_(cudaGraphicsResource_t ogl_resource)
 }
 
 bool
-unregister_ogl_buffers_()
+unregister_vk_buffers_()
 {
     auto& graphics_session = get_session_();
-    auto& ogl_raw_buffer = graphics_session.ogl_raw_buffer;
-    cudaError_t err;
-    if (ogl_raw_buffer.second)
-    {
-        err = cudaGraphicsUnregisterResource(ogl_raw_buffer.second);
-        if (err != cudaSuccess)
-        {
-            std::cerr << "Failed to unregister OpenGL raw buffer: " << cudaGetErrorString(err) << std::endl;
-            std::cerr << "Shared buffers may be in an invalid state." << std::endl;
-            return false;
-        }
-        ogl_raw_buffer.second = nullptr;
-        ogl_raw_buffer.first = 0;
-    }
-
-    for (auto& pair : graphics_session.ogl_rf_buffers)
-    {
-        if (pair.second)
-        {
-            err = cudaGraphicsUnregisterResource(pair.second);
-            if (err != cudaSuccess)
-            {
-                std::cerr << "Failed to unregister OpenGL RF buffer: " << cudaGetErrorString(err) << std::endl;
-                std::cerr << "Shared buffers may be in an invalid state." << std::endl;
-                return false;
-            }
-
-            pair.second = nullptr;
-            pair.first = 0;
-        }
-    }
+    
 
     graphics_session.buffers_init = false;
     return true;    
@@ -123,117 +91,13 @@ deinit_cuda_configuration()
 {
     RfProcessor& rf_processor = get_session_().rf_processor;
     rf_processor.deinit();
-    unregister_ogl_buffers_();
+    unregister_vk_buffers_();
 }
 
 bool
 register_cuda_buffers(const uint* rf_data_ssbos, uint rf_buffer_count, uint raw_data_ssbo)
 {
-    unregister_ogl_buffers_();
-
-    GraphicsSession& graphics_session = get_session_();
-    
-    if(rf_buffer_count > MAX_BUFFER_COUNT)
-    {
-        std::cerr << "Too many RF data buffers. Maximum is " << MAX_BUFFER_COUNT << "." << std::endl;
-        return false;
-    }
-
-    auto& ogl_raw_buffer = graphics_session.ogl_raw_buffer;
-    ogl_raw_buffer.first = raw_data_ssbo;
-
-    CUDA_RETURN_IF_ERROR(cudaGraphicsGLRegisterBuffer(&(ogl_raw_buffer.second), raw_data_ssbo, cudaGraphicsRegisterFlagsNone));
-
-    auto it = graphics_session.ogl_rf_buffers.begin();
-    for (uint i = 0; i < rf_buffer_count; ++i, ++it)
-    {
-        uint ssbo = rf_data_ssbos[i];
-        if (ssbo == 0)
-        {
-            std::cerr << "Invalid SSBO at index " << i << "." << std::endl;
-            return false;
-        }
-        cudaGraphicsResource_t rf_resource;
-        CUDA_RETURN_IF_ERROR(cudaGraphicsGLRegisterBuffer(&rf_resource, ssbo, cudaGraphicsRegisterFlagsNone));
-        *it = { ssbo, rf_resource };
-    }
-    graphics_session.buffers_init = true;
-    return true;
-}
-
-bool
-cuda_set_channel_mapping(const i16 channel_mapping[MAX_CHANNEL_COUNT])
-{
-    RfProcessor& rf_processor = get_session_().rf_processor;
-    
-    std::span<const int16_t> mapping_span(channel_mapping, MAX_CHANNEL_COUNT);
-    if (!rf_processor.set_channel_mapping(mapping_span))
-    {
-        std::cerr << "Failed to set channel mapping." << std::endl;
-        return false;
-    }
-    
-    return true;
-}
-
-bool
-cuda_set_match_filter(const float* match_filter, uint length)
-{
-    RfProcessor& rf_processor = get_session_().rf_processor;
-
-    std::span<const float> filter_span(match_filter, length);
-    if (!rf_processor.set_match_filter(filter_span))
-    {
-        std::cerr << "Failed to set match filter." << std::endl;
-        return false;
-    }
-    
-    return true;
-}
-
-bool
-cuda_decode(size_t input_offset, uint output_buffer_idx)
-{
-    GraphicsSession& graphics_session = get_session_();
-
-    if (!graphics_session.buffers_init)
-    {
-        std::cerr << "OGL buffers not registered." << std::endl;
-        return false;
-    }
-
-    RfProcessor& rf_processor = graphics_session.rf_processor;
-    auto& ogl_raw_buffer = graphics_session.ogl_raw_buffer;
-    auto& ogl_rf_buffers = graphics_session.ogl_rf_buffers;
-
-    auto input_resource = ogl_raw_buffer.second;
-    auto output_resource = ogl_rf_buffers[output_buffer_idx].second;
-
-    int16_t* d_input = nullptr;
-    cuComplex* d_output = nullptr;
-
-    if (!map_ogl_buffer_((void**)&d_input, input_resource))
-    {
-        std::cerr << "Failed to map input OpenGL buffer." << std::endl;
-        return false;
-    }
-    if (!map_ogl_buffer_((void**)&d_output, output_resource))
-    {
-        std::cerr << "Failed to map output OpenGL buffer." << std::endl;
-        unmap_ogl_buffer_(input_resource);
-        return false;
-    }
-
-    size_t input_offset_count = input_offset / sizeof(int16_t);
-
-    bool result = rf_processor.convert_decode_strided(d_input + input_offset_count, d_output, InputDataTypes::TYPE_I16);
-    if (!result)
-    {
-        std::cerr << "Failed to decode data." << std::endl;
-    }
-    unmap_ogl_buffer_(input_resource);
-    unmap_ogl_buffer_(output_resource);
-    return result;
+	return true;
 }
 
 bool
@@ -251,29 +115,61 @@ cuda_hilbert(uint input_buffer_idx, uint output_buffer_idx)
     }
 
     RfProcessor& rf_processor = graphics_session.rf_processor;
-    auto& ogl_rf_buffers = graphics_session.ogl_rf_buffers;
-
-    auto input_resource = ogl_rf_buffers[input_buffer_idx].second;
-    auto output_resource = ogl_rf_buffers[output_buffer_idx].second;
-
-    float* d_input = nullptr;
-    cuComplex* d_output = nullptr;
-
-    if (!map_ogl_buffer_((void**)&d_input, input_resource))
-    {
-        std::cerr << "Failed to map input OpenGL buffer." << std::endl;
-        return false;
-    }
-    if (!map_ogl_buffer_((void**)&d_output, output_resource))
-    {
-        std::cerr << "Failed to map output OpenGL buffer." << std::endl;
-        unmap_ogl_buffer_(input_resource);
-        return false;
-    }
     
+
+	float* d_input = (float*)graphics_session.mapped_ping_pong_buffers[input_buffer_idx]; 
+	cuComplex* d_output = (cuComplex*)graphics_session.mapped_ping_pong_buffers[output_buffer_idx];
+
     bool result = rf_processor.hilbert_transform_strided(d_input, d_output);
-    unmap_ogl_buffer_(input_resource);
-    unmap_ogl_buffer_(output_resource);
+
     return result;
+}
+
+bool
+register_ping_pong_buffers(void* memory_handle, size_t memory_size, uint buffer_count, uint buffer_size)
+{
+	std::cerr << "register_ping_pong_buffer called with handle=" << memory_handle << ", size=" << memory_size << ", buffer_count=" << buffer_count << ", buffer_size=" << buffer_size << std::endl;
+
+	auto& graphics_session = get_session_();
+
+	cudaExternalMemoryHandleDesc mem_desc = {};
+	mem_desc.type = cudaExternalMemoryHandleTypeOpaqueWin32;
+	mem_desc.handle.win32.handle = memory_handle;
+	mem_desc.size = memory_size;
+
+	cudaExternalMemory_t cuda_ext_memory = nullptr;
+	cudaError_t err = cudaImportExternalMemory(&cuda_ext_memory, &mem_desc);
+	if (err != cudaSuccess)
+	{
+		std::cerr << "Failed to import external memory: " << cudaGetErrorString(err) << std::endl;
+		return false;
+	}
+
+	graphics_session.ping_pong_memory = { memory_handle, memory_size };
+	graphics_session.ping_pong_count = buffer_count;
+	graphics_session.ping_pong_buffer_size = buffer_size;
+
+	cudaExternalMemoryBufferDesc buffer_desc = {};
+	buffer_desc.size = buffer_size;
+	buffer_desc.flags = 0;
+
+	for (uint i = 0; i < buffer_count; i++)
+	{
+		buffer_desc.offset = i * buffer_size;
+		void* cuda_ptr = nullptr;
+		err = cudaExternalMemoryGetMappedBuffer( &cuda_ptr, cuda_ext_memory, &buffer_desc);
+
+		if (err != cudaSuccess)
+		{
+			std::cerr << "Failed to get mapped buffer for ping-pong buffer " << i << ": " << cudaGetErrorString(err) << std::endl;
+			unregister_vk_buffers_();
+			return false;
+		}
+		graphics_session.mapped_ping_pong_buffers[i] = cuda_ptr;
+	}
+
+	graphics_session.buffers_init = true;
+
+	return true;
 }
 

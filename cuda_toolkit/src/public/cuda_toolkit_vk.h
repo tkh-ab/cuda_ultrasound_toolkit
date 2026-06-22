@@ -74,6 +74,9 @@
 		 */
 		EXPORT_FN void deinit_cuda_configuration();
 
+
+		EXPORT_FN bool register_ping_pong_buffers(void* memory_handle, size_t memory_size, uint buffer_count, uint buffer_size);
+
 #ifdef __cplusplus
 	}
 #endif
