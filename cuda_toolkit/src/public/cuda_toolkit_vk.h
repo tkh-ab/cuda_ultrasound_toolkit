@@ -34,7 +34,7 @@
 		* output_dims: samples x channels x transmissions
 		* channel_mapping: VSX channels to row-column conversion
 		*/
-		EXPORT_FN bool init_cuda_configuration(const uint* input_dims, const uint* decoded_dims);
+		EXPORT_FN bool init_cuda_configuration(const uint* input_dims, const uint* decoded_dims, uint chunk_channel_count);
 		
 		/**
 		* rf_data_ssbos: List of opengl buffer ids for decoded rf data

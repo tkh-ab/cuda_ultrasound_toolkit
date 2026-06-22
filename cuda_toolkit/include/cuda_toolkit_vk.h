@@ -34,7 +34,7 @@
 		* output_dims: samples x channels x transmissions
 		* channel_mapping: VSX channels to row-column conversion
 		*/
-		EXPORT_FN bool init_cuda_configuration(const uint* input_dims, const uint* decoded_dims);
+		EXPORT_FN bool init_cuda_configuration(const uint* input_dims, const uint* decoded_dims, uint chunk_channel_count);
 		
 		/**
 		* rf_data_ssbos: List of opengl buffer ids for decoded rf data
@@ -75,7 +75,7 @@
 		EXPORT_FN void deinit_cuda_configuration();
 
 
-		EXPORT_FN bool register_ping_pong_buffer(void* handle, size_t size, uint slot_count, uint slot_size);
+		EXPORT_FN bool register_ping_pong_buffers(void* memory_handle, size_t memory_size, uint buffer_count, uint buffer_size);
 
 #ifdef __cplusplus
 	}

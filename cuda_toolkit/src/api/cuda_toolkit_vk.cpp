@@ -71,13 +71,13 @@ unregister_vk_buffers_()
 
 
 bool
-init_cuda_configuration(const uint* input_dims, const uint* decoded_dims)
+init_cuda_configuration(const uint* input_dims, const uint* decoded_dims, uint chunk_channel_count)
 {
 	std::cerr << "\n[CUDA]Initializing CUDA configuration with input_dims=[" << input_dims[0] << ", " << input_dims[1] << "] and decoded_dims=[" 
 			  << decoded_dims[0] << ", " << decoded_dims[1] << ", " << decoded_dims[2] << "]" << std::endl << std::endl;
     RfProcessor& rf_processor = get_session_().rf_processor;
 
-    if (!rf_processor.init({input_dims[0], input_dims[1]}, {decoded_dims[0], decoded_dims[1], decoded_dims[2]}))
+    if (!rf_processor.init({input_dims[0], input_dims[1]}, {decoded_dims[0], chunk_channel_count, decoded_dims[2]}))
     {
         std::cerr << "Failed to initialize CUDA session." << std::endl;
         return false;
@@ -141,7 +141,7 @@ register_ping_pong_buffers(void* memory_handle, size_t memory_size, uint buffer_
 	cudaError_t err = cudaImportExternalMemory(&cuda_ext_memory, &mem_desc);
 	if (err != cudaSuccess)
 	{
-		std::cerr << "Failed to import external memory: " << cudaGetErrorString(err) << std::endl;
+		std::cerr << "Failed to import external memory with cuda error: "<< err << " - " << cudaGetErrorString(err) << std::endl;
 		return false;
 	}
 
