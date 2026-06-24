@@ -195,6 +195,26 @@ RfProcessor::hilbert_transform_strided(float* d_input, cuComplex* d_output)
     return true;
 }
 
+
+bool
+RfProcessor::hilbert_transform_packed(float* d_input, cuComplex* d_output)
+{
+    if (!_init)
+    {
+        std::cerr << "Session not initialized." << std::endl;
+        return false;
+    }
+
+    bool result = _hilbert_handler->packed_hilbert_and_filter(d_input, d_output);
+    if (!result)
+    {
+        std::cerr << "Failed to apply Hilbert transform and filter." << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 bool
 RfProcessor::_setup_decode_buffers()
 {

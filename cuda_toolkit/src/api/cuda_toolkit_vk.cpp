@@ -168,10 +168,16 @@ cuda_hilbert(uint input_buffer_idx, uint output_buffer_idx)
     }
 
     RfProcessor& rf_processor = graphics_session.rf_processor;
-    
+	const int Sample_count = 4;
 
 	float* d_input = (float*)graphics_session.mapped_ping_pong_buffers[input_buffer_idx]; 
 	cuComplex* d_output = (cuComplex*)graphics_session.mapped_ping_pong_buffers[output_buffer_idx];
+
+	cuComplex* d_0 = (cuComplex*)graphics_session.mapped_ping_pong_buffers[0];
+	cuComplex* d_1 = (cuComplex*)graphics_session.mapped_ping_pong_buffers[1];
+	cuComplex* d_2 = (cuComplex*)graphics_session.mapped_ping_pong_buffers[2];
+
+	
 
     if (graphics_session.semaphores_init)
     {
@@ -179,15 +185,21 @@ cuda_hilbert(uint input_buffer_idx, uint output_buffer_idx)
         CUDA_RETURN_IF_ERROR(cudaWaitExternalSemaphoresAsync(&graphics_session.vulkan_signal_semaphore, &wait_params, 1, 0));
     }
 
+	std::cerr << "Buffers pre hilbert: " << std::endl;
+	// print_buffer<cuComplex>(d_0, Sample_count, "Buffer 0");
+	// print_buffer<cuComplex>(d_1, Sample_count, "Buffer 1");
+	// print_buffer<cuComplex>(d_2, Sample_count, "Buffer 2");
+	print_buffer<cuComplex>((cuComplex*)d_input, Sample_count, "Input Buffer");
+	print_buffer<cuComplex>(d_output, Sample_count, "Output Buffer");
 
+    bool result = rf_processor.hilbert_transform_packed(d_input, d_output);
 
-    bool result = rf_processor.hilbert_transform_strided(d_input, d_output);
-
-	cuComplex input_sample;
-	cuComplex output_sample;
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(&input_sample, d_input, sizeof(cuComplex), cudaMemcpyDeviceToHost));
-	CUDA_RETURN_IF_ERROR(cudaMemcpy(&output_sample, d_output, sizeof(cuComplex), cudaMemcpyDeviceToHost));
-	std::cerr << "Input sample: (" << input_sample.x << ", " << input_sample.y << "), Output sample: (" << output_sample.x << ", " << output_sample.y << ")" << std::endl;
+	std::cerr << "Buffers post hilbert: " << std::endl;
+	// print_buffer<cuComplex>(d_0, Sample_count, "Buffer 0");
+	// print_buffer<cuComplex>(d_1, Sample_count, "Buffer 1");
+	// print_buffer<cuComplex>(d_2, Sample_count, "Buffer 2");
+	print_buffer<cuComplex>((cuComplex*)d_input, Sample_count, "Input Buffer");
+	print_buffer<cuComplex>(d_output, Sample_count, "Output Buffer");
 
     if (result && graphics_session.semaphores_init)
     {

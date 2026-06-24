@@ -206,6 +206,27 @@ sample_value(const T* d_value)
 }
 
 
+template <typename T> void
+print_buffer(const T* d_buffer, uint count, const std::string& label = "")
+{
+	std::vector<T> h_buffer(count);
+	cudaMemcpy(h_buffer.data(), d_buffer, count * sizeof(T), cudaMemcpyDeviceToHost);
+
+	if (!label.empty()) {
+		std::cout << label << ": " << std::endl;
+	}
+	for (uint i = 0; i < count; ++i) {
+
+		if constexpr (std::is_same_v<T, cuComplex>) {
+			std::cout << format_cplx(h_buffer[i]) << " ";
+		} else {
+			std::cout << h_buffer[i] << " ";
+		}
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+}
+
 template <typename T> 
 struct PitchedArray
 {

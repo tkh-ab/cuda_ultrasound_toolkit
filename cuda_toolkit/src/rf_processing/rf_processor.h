@@ -39,6 +39,7 @@ public:
 		float sample_freq, const float* filter_coeffs, int filter_length);
     
     bool hilbert_transform_strided(float* d_input, cuComplex* d_output);
+	bool hilbert_transform_packed(float* d_input, cuComplex* d_output);
 
 private:
 

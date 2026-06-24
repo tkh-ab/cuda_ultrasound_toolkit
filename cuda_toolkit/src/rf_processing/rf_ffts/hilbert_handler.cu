@@ -41,7 +41,7 @@ namespace rf_fft
         int double_signal_length = signal_length * 2;
 
         int rank = 1;
-        //CUFFT_RETURN_IF_ERR(cufftPlanMany(&_forward_packed_plan, rank, &signal_length, &signal_length, 1, signal_length, &signal_length, 1, signal_length, CUFFT_R2C, fft_dims.y));
+        CUFFT_RETURN_IF_ERR(cufftPlanMany(&_forward_packed_plan, rank, &signal_length, &signal_length, 1, signal_length, &signal_length, 1, signal_length, CUFFT_R2C, fft_dims.y));
 
         CUFFT_RETURN_IF_ERR(cufftPlanMany(&_inverse_plan, rank, &signal_length, nullptr, 1, 0, nullptr, 1, 0, CUFFT_C2C, fft_dims.y));
 
