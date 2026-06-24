@@ -2,6 +2,7 @@
 #define CUDA_TOOLKIT_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define MAX_CHANNEL_COUNT 256
 
@@ -77,9 +78,14 @@
 
 		EXPORT_FN bool register_ping_pong_buffers(void* memory_handle, size_t memory_size, uint buffer_count, uint buffer_size);
 
+		/**
+		* vulkan_signal_handle: Exported Vulkan semaphore CUDA waits before reading Vulkan output.
+		* cuda_signal_handle: Exported Vulkan semaphore CUDA signals after writing CUDA output.
+		*/
+		EXPORT_FN bool register_cuda_vk_semaphores(void* vulkan_signal_handle, void* cuda_signal_handle);
+
 #ifdef __cplusplus
 	}
 #endif
 
 #endif // !CUDA_TOOLKIT_H
-
