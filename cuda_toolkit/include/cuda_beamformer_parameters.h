@@ -10,14 +10,26 @@ extern "C" {
 
 typedef unsigned int uint;
 
-typedef enum TxRxDirection
+
+typedef enum RCAOrientation
 {
-	TX_ROW_RX_ROW = 0,
-	TX_ROW_RX_COL = 1,
-	TX_COL_RX_ROW = 2,
-	TX_COL_RX_COL = 3,
-	INVALID = -1,
-} TxRxDirection;
+	ORIENT_NONE = 0,
+	ORIENT_ROWS = 1,
+	ORIENT_COLS = 2,
+} RCAOrientation;
+
+// Packed RCAOrientation for TX and RX, top 4 bits for TX, bottom 4 bits for RX
+// RX of none is considered invalid.
+typedef enum
+{
+	INVALID = 0,
+	NO_TX_ROW_RX = 1, // 0000 0001
+	NO_TX_COL_RX = 2, // 0000 0010
+	ROW_TX_ROW_RX = 17, // 0001 0001
+	ROW_TX_COL_RX = 18, // 0001 0010
+	COL_TX_ROW_RX = 33, // 0010 0001
+	COL_TX_COL_RX = 34, // 0010 0010
+} PackedTROrientation;
 
 typedef enum BeamformPlane
 {
@@ -40,6 +52,7 @@ typedef enum SequenceId
 	EPIC_UFORCES = 8,
 	EPIC_UHERCULES = 9,
 	FLASH = 10,
+	HERO_PA = 11,
 	MIXES_S = 100,
 } SequenceId;
 
@@ -98,7 +111,6 @@ typedef struct CudaBeamformerParameters
 	uint dec_data_dim[4];	// Expected dimensions after decoding [samples, rx_channels, transmits]; last element ignored
 
 	EncodingMatrix decode;		    // Decode or just reshape data
-	TxRxDirection transmit_mode;	// TX and RX directions
 	SequenceId das_shader_id;		// Sequence type
 	float time_offset;				// pulse length correction time [s]
 
@@ -128,6 +140,8 @@ typedef struct CudaBeamformerParameters
 	short sparse_elements[256];		// Channels used for virtual UFORCES elements
 	float focal_depths[256];		// [m] Focal Depths for each transmit
 	float transmit_angles[256];		// [radians] Transmit Angles for each transmit
+
+	int tr_orientations[256]; // Supports per-event orientation changes
 
 	/*
 	*	Extra parameters (not part of the standard BP)

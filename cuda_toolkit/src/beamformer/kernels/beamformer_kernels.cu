@@ -477,5 +477,37 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 	return;
 }
 
+__global__ void
+tpw_beamform(const cuComplex* rfData, cuComplex* volume)
+{
+		uint xy_voxel = threadIdx.x + blockIdx.x * blockDim.x;
+	if (xy_voxel > Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y)
+	{
+		return;
+	}
+
+	uint3 voxel_idx = { xy_voxel % Beamformer_Constants.voxel_dims.x, xy_voxel / Beamformer_Constants.voxel_dims.x, blockIdx.y };
+	size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+
+	const float3 vox_loc =
+	{
+		Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
+		Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
+		Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
+	};
+
+	// If the voxel is out of the f_number defined range for all elements skip it
+	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
+	float3 focal_point = {Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, vox_loc.y, 0.0f};
+
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 0, vox_loc.z };
+	
+	int delay_samples = Beamformer_Constants.delay_samples;
+	
+}
+
+
+
 }
 
