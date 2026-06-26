@@ -107,23 +107,28 @@ Beamformer::setup_beamformer(const CudaBeamformerParameters& bp)
 
 	CUDA_NULL_FREE(_d_beamformer_hadamard);
 
-    size_t hadamard_size = _constants.readi_group_count * _constants.readi_group_count * sizeof(float);
-    CUDA_RETURN_IF_ERROR(cudaMalloc(&_d_beamformer_hadamard, hadamard_size));
-    if(_constants.readi_group_count == 1)
-    {
-        float one = 1.0f;
-        
-        CUDA_RETURN_IF_ERROR(cudaMemcpy(_d_beamformer_hadamard, &one, sizeof(float), cudaMemcpyHostToDevice));
-    }
-    else
-    {
-        if(! decoding::HadamardDecoder::generate_hadamard(
-            _d_beamformer_hadamard, _constants.readi_group_count, _constants.encoded_matrix))
-        {
-            std::cerr << "Beamformer: Failed to generate Hadamard matrix." << std::endl;
-            return false;
-        }
-    }
+	if(_constants.encoded_matrix != EncodingMatrix::NONE)
+	{
+		size_t hadamard_size = _constants.readi_group_count * _constants.readi_group_count * sizeof(float);
+		CUDA_RETURN_IF_ERROR(cudaMalloc(&_d_beamformer_hadamard, hadamard_size));
+		if(_constants.readi_group_count == 1)
+		{
+			float one = 1.0f;
+			
+			CUDA_RETURN_IF_ERROR(cudaMemcpy(_d_beamformer_hadamard, &one, sizeof(float), cudaMemcpyHostToDevice));
+		}
+		else
+		{
+			if(! decoding::HadamardDecoder::generate_hadamard(
+				_d_beamformer_hadamard, _constants.readi_group_count, _constants.encoded_matrix))
+			{
+				std::cerr << "Beamformer: Failed to generate Hadamard matrix." << std::endl;
+				CUDA_NULL_FREE(_d_beamformer_hadamard);
+				return false;
+			}
+		}
+	}
+    
 
     return true;
 }

@@ -55,12 +55,15 @@ RfProcessor::init(uint2 rf_raw_dim, uint3 dec_data_dim, EncodingMatrix readi_ord
         return false;
     }
 
-    if (!_hadamard_decoder->set_hadamard(dec_data_dim.z, readi_ordering))
-    {
-        std::cerr << "Failed to generate Hadamard matrix." << std::endl;
-        return false;
-    }
-
+	if(readi_ordering != EncodingMatrix::NONE)
+	{
+		if (!_hadamard_decoder->set_hadamard(dec_data_dim.z, readi_ordering))
+		{
+			std::cerr << "Failed to generate Hadamard matrix." << std::endl;
+			return false;
+		}
+	}
+    
     if (!_hilbert_handler->plan_ffts({ sample_count, channel_count }))
     {
         std::cerr << "Failed to plan FFTs." << std::endl;
