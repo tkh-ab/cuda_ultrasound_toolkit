@@ -430,7 +430,7 @@ Beamformer::_tpw_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const Cud
 
 	for (int i = 0; i < _constants.tx_count; i++)
 	{
-		float angle = bp.foci[i * 3 + 2] * CUDART_PI_F / 180.0f; // Convert degrees to radians
+		float angle = bp.foci[i * 3 + 2]; // Convert degrees to radians
 		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)(d_angles + i), (void*)&angle, sizeof(float), cudaMemcpyHostToDevice));
 	}
 
