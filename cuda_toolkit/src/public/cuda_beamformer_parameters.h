@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+#define MAX_ACQ_COUNT 256
 #define MAX_CHANNEL_COUNT 256
 #define MAX_FILTER_LENGTH 1024
 
@@ -136,12 +137,13 @@ typedef struct CudaBeamformerParameters
 	/*
 	*	Large arrays seperate from the main BP
 	*/
-	short channel_mapping[256];		// Maps the ordering of the raw channel data to the physical channels
-	short sparse_elements[256];		// Channels used for virtual UFORCES elements
-	float focal_depths[256];		// [m] Focal Depths for each transmit
-	float transmit_angles[256];		// [radians] Transmit Angles for each transmit
+	short channel_mapping[MAX_CHANNEL_COUNT];		// Maps the ordering of the raw channel data to the physical channels
+	short sparse_elements[MAX_CHANNEL_COUNT];		// Channels used for virtual UFORCES elements
+	float foci[MAX_ACQ_COUNT * 3];
 
-	int tr_orientations[256]; // Supports per-event orientation changes
+	// If we interleave multiple orientations, beamform each independently for now
+	RCAOrientation tx_orientation; 
+	RCAOrientation rx_orientation; 
 
 	/*
 	*	Extra parameters (not part of the standard BP)

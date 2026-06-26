@@ -10,13 +10,16 @@ static constexpr uint MAX_TX_COUNT = 128;
 static constexpr uint Y_BLOCK_SIZE = 1;
 namespace bf_kernels
 {
-    enum class FocalDirection
-    {
-        PLANE_FOCUS = 0,
-        XZ_FOCUS = 1,
-        YZ_FOCUS = 2,
-        SPHERE_FOCUS = 3,
-    };  
+
+	enum class FocusType
+	{
+		NO_TX_FOCUS = 0,
+		XZ_PLANE = 1,
+		YZ_PLANE = 2,
+		XZ_FOCUS = 3,
+		YZ_FOCUS = 4,
+		SPHERE_FOCUS = 5
+	};
 
 	enum class TrOscDirection
 	{
@@ -38,7 +41,9 @@ namespace bf_kernels
         float3 focal_point;
         float2 pitches;
         int delay_samples;
-        FocalDirection focal_direction;
+		FocusType focus_type;
+        RCAOrientation tx_orientation;
+		RCAOrientation rx_orientation;
         SequenceId sequence;
 
 		float lambda_0;

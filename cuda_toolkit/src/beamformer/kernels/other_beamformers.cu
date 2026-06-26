@@ -32,7 +32,7 @@ namespace bf_kernels
 
         float3 src_pos = Beamformer_Constants.focal_point;
 
-        float3 tx_vec = utils::calc_tx_distance(vox_loc, src_pos, Beamformer_Constants.focal_direction);
+        float3 tx_vec = utils::calc_tx_distance(vox_loc, src_pos, Beamformer_Constants.focus_type);
 
         float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, vox_loc.z };
 
@@ -165,7 +165,7 @@ namespace bf_kernels
         // If the voxel is out of the f_number defined range for all elements skip it
         if (!utils::check_ranges(vox_loc, Beamformer_Constants.fn_rx, Beamformer_Constants.xdc_maxes)) return;
 
-        float3 tx_vec = utils::calc_tx_distance(vox_loc, src_pos, Beamformer_Constants.focal_direction);
+        float3 tx_vec = utils::calc_tx_distance(vox_loc, src_pos, Beamformer_Constants.focus_type);
 
         float3 rx_vec =	  { Beamformer_Constants.xdc_mins.x - vox_loc.x + channel_id * Beamformer_Constants.pitches.x + Beamformer_Constants.pitches.x / 2, 
                             Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, 
@@ -262,7 +262,7 @@ walsh_forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* h
 		focal_point.z = 0; // Ignoring the elevational focus as it is out of plane
 	}
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, vox_loc.z };
 
 	if (Beamformer_Constants.sequence == SequenceId::FORCES)
@@ -357,7 +357,7 @@ per_voxel_beamform(const cuComplex* rfData, cuComplex* volume, const float* hada
 		focal_point.z = 0; // Ignoring the elevational focus as it is out of plane
 	}
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, vox_loc.z };
 
 	if (Beamformer_Constants.sequence == SequenceId::FORCES)

@@ -31,7 +31,7 @@ forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamar
 	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
 	float3 focal_point = {Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, vox_loc.y, 0.0f};
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 0, vox_loc.z };
 
 	uint readi_group_count = Beamformer_Constants.readi_group_count;
@@ -112,7 +112,7 @@ uforces_beamform(const cuComplex* rfData, cuComplex* volume, const short* uforce
 	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
 	float3 focal_point = {Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, vox_loc.y, 0.0f};
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 0, vox_loc.z };
 
 	uint readi_group_count = Beamformer_Constants.readi_group_count;
@@ -194,7 +194,7 @@ hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadam
 	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
 	float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = {	Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 
 						Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, vox_loc.z };
 
@@ -283,7 +283,7 @@ walsh_hercules_beamform(const cuComplex* rfData, cuComplex* volume, const float*
 	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
 	float3 focal_point = {0.0f, 0.0f, Beamformer_Constants.focal_point.z};
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
+	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focus_type);
 	float3 rx_vec = {	Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 
 						Beamformer_Constants.xdc_mins.y - vox_loc.y + Beamformer_Constants.pitches.y / 2, vox_loc.z };
 
@@ -423,7 +423,7 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 		{
 			rx_loc.x = starting_rx_loc.x + e * Beamformer_Constants.pitches.x;
 
-			float3 tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focal_direction);
+			float3 tx_vec = utils::calc_tx_distance(block_loc, focal_point, Beamformer_Constants.focus_type);
 			float3 rx_vec = SUB_V3(rx_loc, block_loc);
 
 			//float total_block_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
@@ -443,7 +443,7 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 				float3 current_vox_loc = vox_loc;
 				current_vox_loc.y += y * Beamformer_Constants.resolutions.y;
 
-				tx_vec = utils::calc_tx_distance(current_vox_loc, focal_point, Beamformer_Constants.focal_direction);
+				tx_vec = utils::calc_tx_distance(current_vox_loc, focal_point, Beamformer_Constants.focus_type);
 				rx_vec = SUB_V3(rx_loc, current_vox_loc);
 
 				//float total_vox_distance = utils::total_path_length(tx_vec, rx_vec, focal_point.z, 1.0f);
@@ -478,36 +478,60 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 }
 
 __global__ void
-tpw_beamform(const cuComplex* rfData, cuComplex* volume)
+tpw_beamform(const cuComplex* rfData, cuComplex* volume, const float* angles)
 {
-		uint xy_voxel = threadIdx.x + blockIdx.x * blockDim.x;
-	if (xy_voxel > Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y)
-	{
-		return;
-	}
+	uint3 voxel_idx = { threadIdx.x + blockIdx.x * blockDim.x,
+						threadIdx.y + blockIdx.y * blockDim.y,
+						threadIdx.z + blockIdx.z * blockDim.z };
 
-	uint3 voxel_idx = { xy_voxel % Beamformer_Constants.voxel_dims.x, xy_voxel / Beamformer_Constants.voxel_dims.x, blockIdx.y };
-	size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
-
-	const float3 vox_loc =
-	{
+	const float3 vox_loc = {
 		Beamformer_Constants.volume_mins.x + voxel_idx.x * Beamformer_Constants.resolutions.x,
 		Beamformer_Constants.volume_mins.y + voxel_idx.y * Beamformer_Constants.resolutions.y,
 		Beamformer_Constants.volume_mins.z + voxel_idx.z * Beamformer_Constants.resolutions.z,
 	};
 
-	// If the voxel is out of the f_number defined range for all elements skip it
-	// if (!utils::check_ranges(vox_loc, Beamformer_Constants.f_number, Beamformer_Constants.xdc_maxes)) return;
-	float3 focal_point = {Beamformer_Constants.xdc_mins.x + Beamformer_Constants.pitches.x / 2, vox_loc.y, 0.0f};
+	if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims)) return;
 
-	float3 tx_vec = utils::calc_tx_distance(vox_loc, focal_point, Beamformer_Constants.focal_direction);
 	float3 rx_vec = { Beamformer_Constants.xdc_mins.x - vox_loc.x + Beamformer_Constants.pitches.x / 2, 0, vox_loc.z };
-	
+
+	float tpw_lat_pos = Beamformer_Constants.focus_type == FocusType::YZ_PLANE ? vox_loc.y : vox_loc.x;
+
 	int delay_samples = Beamformer_Constants.delay_samples;
-	
+	cuComplex total = { 0.0f, 0.0f };
+	float incoherent_sum = 0.0f;
+
+	for (int c = 0; c < Beamformer_Constants.channel_count; c++)
+	{
+		float rx_dist = NORM_F3(rx_vec);
+		float apo = utils::f_num_apodization(abs(rx_vec.x), vox_loc.z, Beamformer_Constants.fn_rx);
+		rx_vec.x += Beamformer_Constants.pitches.x;
+
+		if (apo < 0.1f) continue;
+		
+		for (int acq = 0; acq < Beamformer_Constants.tx_count; acq++)
+		{	
+			float tx_dist = tpw_lat_pos * sinf(angles[acq]) + vox_loc.z * cosf(angles[acq]);
+			float scan_index = (rx_dist + tx_dist) * Beamformer_Constants.samples_per_meter + delay_samples;
+			scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
+
+			size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * acq + Beamformer_Constants.sample_count * c;
+
+			cuComplex value = utils::fast_cubic_spline(scan_index, rfData + channel_offset);
+			value = SCALE_V2(value, apo);
+			total = ADD_V2(total, value);
+			incoherent_sum += NORM_SQUARE_V2(value);
+		}		
+	}
+
+	float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;
+	coherency_factor = powf(coherency_factor, Beamformer_Constants.coherency_weighting);
+	coherency_factor = utils::clear_nan(coherency_factor);
+	total = SCALE_V2(total, coherency_factor);
+
+	size_t volume_offset = voxel_idx.z * Beamformer_Constants.voxel_dims.x * Beamformer_Constants.voxel_dims.y + voxel_idx.y * Beamformer_Constants.voxel_dims.x + voxel_idx.x;
+	volume[volume_offset] = total;
+
 }
-
-
 
 }
 

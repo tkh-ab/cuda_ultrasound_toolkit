@@ -13,7 +13,7 @@ namespace bf_kernels
 template <SequenceId SEQ>
 concept SupportedDASSequence = (SEQ == SequenceId::FORCES) || (SEQ == SequenceId::HERCULES);
 
-template<SequenceId SEQ, FocalDirection DIR> __device__ inline float3 
+template<SequenceId SEQ, FocusType DIR> __device__ inline float3 
 initial_tx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc, const float3 focal_point)
 {
 	if constexpr (SEQ == SequenceId::FORCES)
@@ -22,19 +22,23 @@ initial_tx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc
 	}
 	else if constexpr (SEQ == SequenceId::HERCULES)
 	{
-		if constexpr (DIR == FocalDirection::PLANE_FOCUS)
+		if constexpr (DIR == FocusType::YZ_PLANE)
 		{
-			return make_float3(0.0f, 0.0f, vox_loc.z);
+			return make_float3(0.0f, vox_loc.y * sinf(focal_point.y), vox_loc.z * cosf(focal_point.y));
 		}
-		else if constexpr (DIR == FocalDirection::XZ_FOCUS)
+		else if constexpr (DIR == FocusType::XZ_PLANE)
+		{
+			return make_float3(vox_loc.x * sinf(focal_point.x), 0.0f, vox_loc.z * cosf(focal_point.x));
+		}
+		else if constexpr (DIR == FocusType::XZ_FOCUS)
 		{
 			return make_float3(vox_loc.x - focal_point.x, 0.0f, vox_loc.z - focal_point.z);
 		}
-		else if constexpr (DIR == FocalDirection::YZ_FOCUS)
+		else if constexpr (DIR == FocusType::YZ_FOCUS)
 		{
 			return make_float3(0.0f, vox_loc.y - focal_point.y, vox_loc.z - focal_point.z);
 		}
-		else if constexpr (DIR == FocalDirection::SPHERE_FOCUS)
+		else if constexpr (DIR == FocusType::SPHERE_FOCUS)
 		{
 			static_assert(false, "Spherical focusing not supported for HERCULES");
 		}
@@ -123,7 +127,7 @@ sin_apo_to(float element_loc, float peak_center, float power)
 }
 
 
-template<FocalDirection DIR, EncodingMatrix READI> __global__ void
+template<FocusType DIR, EncodingMatrix READI> __global__ void
 hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u64 decode_row = 0)
 {
 	// TODO: Check if inlining this to the vox_loc calculation drops the register count
@@ -256,7 +260,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 
 	if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims)) return;
 
-	float3 tx_vec = initial_tx_vec<FORCES, FocalDirection::XZ_FOCUS>(Beamformer_Constants.xdc_mins,
+	float3 tx_vec = initial_tx_vec<FORCES, FocusType::XZ_FOCUS>(Beamformer_Constants.xdc_mins,
 													Beamformer_Constants.pitches,
 													vox_loc, {0.0f, 0.0f, 0.0f});
 

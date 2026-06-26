@@ -61,24 +61,27 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
     constants.readi_group_id = static_cast<u8>(bp.readi_group_id);
     constants.encoded_matrix = bp.decode;
 
-    float3 focal_point = {0.0f, 0.0f, bp.focal_depths[0]};
-    constants.focal_point = focal_point;
-    if(isinf(constants.focal_point.z))
-    {
-        constants.focal_direction = bf_kernels::FocalDirection::PLANE_FOCUS;
-        constants.focal_point.z = 0.0f;
-    }
-    else if(bp.das_shader_id == SequenceId::HERCULES 
-        || bp.das_shader_id == SequenceId::UHURCULES
-        || bp.das_shader_id == SequenceId::EPIC_UHERCULES)
-    {
-        constants.focal_direction = bf_kernels::FocalDirection::YZ_FOCUS;
-    }
-    else
-    {
-        constants.focal_direction = bf_kernels::FocalDirection::XZ_FOCUS;
-    }
+    constants.focal_point = {bp.foci[0], bp.foci[1], bp.foci[2]};
+	constants.tx_orientation = bp.tx_orientation;
+	constants.rx_orientation = bp.rx_orientation;
 
+	if( constants.tx_orientation == RCAOrientation::ORIENT_NONE )
+	{
+		constants.focus_type = bf_kernels::FocusType::NO_TX_FOCUS;
+	}
+	else if( isinf(constants.focal_point.z) || constants.sequence == SequenceId::RCA_TPW )
+	{
+		constants.focal_point.z = 0.0f;
+		constants.focus_type = 	constants.tx_orientation == constants.rx_orientation ? 
+								bf_kernels::FocusType::XZ_PLANE : bf_kernels::FocusType::YZ_PLANE;
+	}
+	else
+	{
+		// This covers diverging and converging transmits, 3D spherical focusing is not supported on the arrays
+		constants.focus_type = 	constants.tx_orientation == constants.rx_orientation ?
+								bf_kernels::FocusType::XZ_FOCUS : bf_kernels::FocusType::YZ_FOCUS;
+	}
+	
 	constants.coherency_weighting = min(max(bp.coherency_weighting, 0.0f), 1.0f);
 
 	constants.apo_type = bp.apo_type;
@@ -172,6 +175,10 @@ Beamformer::beamform(cuComplex* d_input, cuComplex* d_output, const CudaBeamform
 	{
 		result = _test_new_herc_beamform(d_input, d_output);
 	}
+	else if (bp.das_shader_id == SequenceId::RCA_TPW)
+	{
+		result = _tpw_beamform(d_input, d_output, bp);
+	}
 	else
 	{
 		std::cerr << "Beamformer: Unsupported sequence ID " << static_cast<int>(bp.das_shader_id) << std::endl;
@@ -238,13 +245,13 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 
 		if(_constants.encoded_matrix == EncodingMatrix::WALSH)
 		{
-			if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+			if(_constants.focus_type == bf_kernels::FocusType::YZ_FOCUS)
 			{
-				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_FOCUS, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 			}
-			else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+			else if(_constants.focus_type == bf_kernels::FocusType::YZ_PLANE)
 			{
-				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_PLANE, EncodingMatrix::WALSH><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 			}
 			else
 			{
@@ -254,13 +261,13 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 		}
 		else if (_constants.encoded_matrix == EncodingMatrix::HADAMARD)
 		{
-			if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+			if(_constants.focus_type == bf_kernels::FocusType::YZ_FOCUS)
 			{
-				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_FOCUS, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 			}
-			else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+			else if(_constants.focus_type == bf_kernels::FocusType::YZ_PLANE)
 			{
-				bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+				bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_PLANE, EncodingMatrix::HADAMARD><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 			}
 			else
 			{
@@ -271,13 +278,13 @@ Beamformer::_test_new_herc_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume)
 	}
 	else
 	{
-		if(_constants.focal_direction == bf_kernels::FocalDirection::YZ_FOCUS)
+		if(_constants.focus_type == bf_kernels::FocusType::YZ_FOCUS)
 		{
-			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::YZ_FOCUS, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_FOCUS, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 		}
-		else if(_constants.focal_direction == bf_kernels::FocalDirection::PLANE_FOCUS)
+		else if(_constants.focus_type == bf_kernels::FocusType::YZ_PLANE)
 		{
-			bf_kernels::hercules_beamform_new<bf_kernels::FocalDirection::PLANE_FOCUS, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
+			bf_kernels::hercules_beamform_new<bf_kernels::FocusType::YZ_PLANE, EncodingMatrix::NONE><<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, compact_hadamard_row);
 		}
 		else
 		{
@@ -393,6 +400,61 @@ Beamformer::_test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volum
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
 
+
+	return true;
+}
+
+
+bool
+Beamformer::_tpw_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const CudaBeamformerParameters& bp)
+{
+	std::cout << "Starting TPW beamform." << std::endl;
+
+	float* d_angles = nullptr;
+	CUDA_RETURN_IF_ERROR(cudaMalloc((void**)&d_angles, sizeof(float) * _constants.tx_count));
+
+	int angle_index;
+	if (_constants.focus_type == bf_kernels::FocusType::XZ_PLANE)
+	{
+		angle_index = 0;
+	}
+	else if (_constants.focus_type == bf_kernels::FocusType::YZ_PLANE)
+	{
+		angle_index = 1;
+	}
+	else
+	{
+		std::cerr << "TPW beamforming requires a plane focus." << std::endl;
+		return false;
+	}
+
+	for (int i = 0; i < _constants.tx_count; i++)
+	{
+		float angle = bp.foci[i * 3 + 2] * CUDART_PI_F / 180.0f; // Convert degrees to radians
+		CUDA_RETURN_IF_ERROR(cudaMemcpy((void*)(d_angles + i), (void*)&angle, sizeof(float), cudaMemcpyHostToDevice));
+	}
+
+	uint3 vox_counts = _constants.voxel_dims;
+	static constexpr dim3 test_block_dims = {8,1,32};
+	dim3 block_dims = test_block_dims;
+	dim3 grid_dims = { UINT_DIV_CEIL(vox_counts.x, block_dims.x),
+					   UINT_DIV_CEIL(vox_counts.y, block_dims.y),
+					   UINT_DIV_CEIL(vox_counts.z, block_dims.z) };
+	auto start = std::chrono::high_resolution_clock::now();
+
+	size_t vol_size = vox_counts.x * vox_counts.y * vox_counts.z * sizeof(cuComplex);
+	CUDA_RETURN_IF_ERROR(cudaMemset(d_volume, 0x00, vol_size));
+
+	bf_kernels::tpw_beamform<<<grid_dims, block_dims>>>(d_rf_buffer, d_volume, d_angles);
+
+	CUDA_RETURN_IF_ERROR(cudaGetLastError());
+	CUDA_RETURN_IF_ERROR(cudaDeviceSynchronize());
+
+	cudaFree(d_angles);
+	
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Kernel duration: " << elapsed.count() << " seconds" << std::endl;
 
 	return true;
 }

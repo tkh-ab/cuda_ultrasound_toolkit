@@ -39,5 +39,7 @@ private:
 
 	bool _test_new_forces_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume);
 
+	bool _tpw_beamform(cuComplex* d_rf_buffer, cuComplex* d_volume, const CudaBeamformerParameters& bp);
+
     bf_kernels::BeamformerConstants _constants;      // Current beamformer constants
 };

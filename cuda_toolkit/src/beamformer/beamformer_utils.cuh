@@ -6,23 +6,28 @@
 namespace bf_kernels::utils
 {
     __device__ inline float3
-    calc_tx_distance(float3 vox_loc, float3 source_pos, FocalDirection direction)
+    calc_tx_distance(float3 vox_loc, float3 focus, FocusType type)
     {
 		// TODO, these are backwards, update but make sure nothing regresses
         float3 tx_distance;
-        if (direction == FocalDirection::XZ_FOCUS)
-        {
-            tx_distance = { source_pos.x - vox_loc.x, 0.0f, source_pos.z - vox_loc.z};
-        }
-        else if (direction == FocalDirection::YZ_FOCUS)
-        {
-            tx_distance = { 0.0f, source_pos.y - vox_loc.y, source_pos.z - vox_loc.z };
-        }
-        else
-        {
-            // Plane wave
-            tx_distance = {0.0f, 0.0f, vox_loc.z };
-        }
+
+		switch (type)
+		{
+			case FocusType::XZ_FOCUS:
+				tx_distance = { focus.x - vox_loc.x, 0.0f, focus.z - vox_loc.z};
+				break;
+			case FocusType::YZ_FOCUS:
+				tx_distance = { 0.0f, focus.y - vox_loc.y, focus.z - vox_loc.z };
+				break;
+			case FocusType::XZ_PLANE:
+				tx_distance = { vox_loc.x * sinf(focus.x), 0.0f, vox_loc.z * cosf(focus.x) };
+				break;
+			case FocusType::YZ_PLANE:
+				tx_distance = { 0.0f, vox_loc.y * sinf(focus.y), vox_loc.z * cosf(focus.y) };
+				break;
+			default:
+				break;
+		}
 
         return tx_distance;
     }
