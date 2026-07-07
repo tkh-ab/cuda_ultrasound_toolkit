@@ -34,6 +34,7 @@ constexpr float NaN = (float)0xFFFFFFFF;
 constexpr float I_SQRT_64 = 0.125f;
 constexpr float I_SQRT_128 = 0.088388347648318f;
 constexpr float PI_F = 3.141592654f;
+constexpr float TWO_PI_F = 2.0f * PI_F;
 constexpr double PI_D = 3.141592653589793;
 
 constexpr int MAX_THREADS_PER_BLOCK = 128;

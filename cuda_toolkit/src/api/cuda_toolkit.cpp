@@ -150,29 +150,41 @@ cuda_toolkit::beamform(std::span<const uint8_t> input_data,
         return false;
     }
 
-	if(bp.decode)
+	// TODO: Set this up properly
+	if(bp.sample_type == SAMPLE_NORMAL)
 	{
-		if (!rf_processor.convert_decode_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+		if(bp.decode)
 		{
-			std::cerr << "Failed to decode RF data." << std::endl;
+			if (!rf_processor.convert_decode_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+			{
+				std::cerr << "Failed to decode RF data." << std::endl;
+				return false;
+			}
+		}
+		else
+		{
+			if (!rf_processor.convert_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+			{
+				std::cerr << "Failed to convert RF data." << std::endl;
+				return false;
+			}
+		}
+		
+		if (!rf_processor.hilbert_transform_strided((float*)buffers.d_decoded, buffers.d_rf))
+		{
+			std::cerr << "Failed to apply Hilbert transform." << std::endl;
 			return false;
 		}
 	}
 	else
 	{
-		if (!rf_processor.convert_strided(buffers.d_input, buffers.d_decoded, bp.data_type))
+		if (!rf_processor.convert_demod(buffers.d_input, buffers.d_rf, bp.data_type, bp.center_frequency, bp.sampling_frequency, bp.rf_filter, bp.filter_length))
 		{
-			std::cerr << "Failed to convert RF data." << std::endl;
+			std::cerr << "Failed to convert and demodulate RF data." << std::endl;
 			return false;
 		}
 	}
-    
-
-	if (!rf_processor.hilbert_transform_strided((float*)buffers.d_decoded, buffers.d_rf))
-	{
-		std::cerr << "Failed to apply Hilbert transform." << std::endl;
-        return false;
-	}
+	
     
     bool result = false;
     if (beamformer.beamform(buffers.d_rf, buffers.d_output, bp))

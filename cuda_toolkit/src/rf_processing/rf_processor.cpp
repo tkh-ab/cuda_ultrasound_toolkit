@@ -198,7 +198,7 @@ RfProcessor::hilbert_transform_strided(float* d_input, cuComplex* d_output)
 bool
 RfProcessor::_setup_decode_buffers()
 {
-    size_t data_size = _decoded_data_count() * sizeof(float);
+    size_t data_size = _decoded_data_count() * sizeof(cuComplex);
 
     if (!_cleanup_decode_buffers())
     {
@@ -224,4 +224,27 @@ RfProcessor::_cleanup_decode_buffers()
         CUDA_NULL_FREE(_decode_buffers.d_decoded);
     }
     return true;
+}
+
+bool
+RfProcessor::convert_demod(void* d_input, cuComplex* d_output, InputDataTypes type, float demod_freq, 
+	float sample_freq, const float* filter_coeffs, int filter_length)
+{
+	if (!_init)
+	{
+		std::cerr << "Session not initialized." << std::endl;
+		return false;
+	}
+
+	bool result = _data_converter->convert_and_demod(d_input, (cuComplex*)_decode_buffers.d_decoded, d_output, type, 
+		{ _rf_raw_dim.x, _rf_raw_dim.y }, { _dec_data_dim.x, _dec_data_dim.y, _dec_data_dim.z }, 
+		demod_freq, sample_freq, filter_coeffs, filter_length);
+	
+	if (!result)
+	{
+		std::cerr << "Failed to convert and demodulate data." << std::endl;
+		return false;
+	}
+
+	return result;
 }

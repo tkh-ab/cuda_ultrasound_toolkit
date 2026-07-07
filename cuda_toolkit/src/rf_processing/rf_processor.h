@@ -34,6 +34,9 @@ public:
 
 	bool convert_decode_strided(void* d_input, cuComplex* d_output, InputDataTypes type);
 	bool convert_strided(void* d_input, cuComplex* d_output, InputDataTypes type);
+
+	bool convert_demod(void* d_input, cuComplex* d_output, InputDataTypes type, float demod_freq, 
+		float sample_freq, const float* filter_coeffs, int filter_length);
     
     bool hilbert_transform_strided(float* d_input, cuComplex* d_output);
 

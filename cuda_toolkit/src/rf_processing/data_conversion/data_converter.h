@@ -20,6 +20,9 @@ namespace data_conversion
         bool copy_channel_mapping(std::span<const int16_t> channel_mapping);
 
         bool convert(const void* d_input, void* d_output, InputDataTypes input_type, uint2 input_dims, uint3 output_dims);
+
+		bool convert_and_demod(const void* d_input, cuComplex* d_mid, cuComplex* d_output, InputDataTypes input_type, 
+			uint2 input_dims, uint3 output_dims, float demod_freq, float sample_freq, const float* filter_coeffs, int filter_length);
         
 
     private:

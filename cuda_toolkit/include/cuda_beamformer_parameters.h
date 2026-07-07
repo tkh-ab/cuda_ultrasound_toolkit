@@ -19,6 +19,12 @@ typedef enum RCAOrientation
 	ORIENT_COLS = 2,
 } RCAOrientation;
 
+typedef enum SampleType
+{
+	SAMPLE_NORMAL = 0,
+	SAMPLE_BANDPASS = 1,
+} SampleType;
+
 // Packed RCAOrientation for TX and RX, top 4 bits for TX, bottom 4 bits for RX
 // RX of none is considered invalid.
 typedef enum
@@ -161,6 +167,8 @@ typedef struct CudaBeamformerParameters
 	InputDataTypes data_type;		// Type of the raw data being passed in
 	ApoType apo_type;				// Type of apodization to apply during beamforming
 	int to_power;					// Power to raise the TO apodization to
+
+	SampleType sample_type;			
 } CudaBeamformerParameters;
 
 #ifdef __cplusplus

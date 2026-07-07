@@ -511,6 +511,11 @@ tpw_beamform(const cuComplex* rfData, cuComplex* volume, const float* angles)
 		for (int acq = 0; acq < Beamformer_Constants.tx_count; acq++)
 		{	
 			float tx_dist = tpw_lat_pos * sinf(angles[acq]) + vox_loc.z * cosf(angles[acq]);
+
+			// Distance calculations assume t=0 occurs when the center element transmits,
+			// but VSX considereds 0 when the first element transmits, so for each acq we need to adjust
+			//int angle_delay = (int)roundf(Beamformer_Constants.xdc_maxes.x * tanf(abs(angles[acq])) * Beamformer_Constants.samples_per_meter);
+
 			float scan_index = (rx_dist + tx_dist) * Beamformer_Constants.samples_per_meter + delay_samples;
 			scan_index = utils::clampf(scan_index, 1.0f, (float)Beamformer_Constants.sample_count - 2.0f);
 
