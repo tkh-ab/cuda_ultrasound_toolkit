@@ -46,6 +46,9 @@ namespace bf_kernels
 		RCAOrientation rx_orientation;
         SequenceId sequence;
 
+		float center_freq;
+		float sample_freq;
+
 		float lambda_0;
 
         // Render Constants

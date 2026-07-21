@@ -32,7 +32,7 @@ namespace data_conversion::kernels
 
         if (tx_idx >= output_dims.z) return;
 
-        uint raw_channel_idx = d_channel_mapping[output_channel_idx]; // This is 1 indexed from matlab
+        uint raw_channel_idx = d_channel_mapping[output_channel_idx];
         
         uint input_idx = (raw_channel_idx * input_dims.x) + raw_sample_idx;
         uint output_idx = (tx_idx * output_dims.y * output_dims.x) + (output_channel_idx * output_dims.x) + output_sample_idx;
@@ -52,7 +52,7 @@ namespace data_conversion::kernels
         uint tx_idx = raw_sample_idx / output_dims.x;
         uint output_sample_idx = raw_sample_idx % output_dims.x;
 
-        if (tx_idx >= output_dims.z) return;
+        if (raw_sample_idx * 2 >= input_dims.x) return;
 
         uint raw_channel_idx = d_channel_mapping[output_channel_idx]; 
         
@@ -60,7 +60,9 @@ namespace data_conversion::kernels
         uint output_idx = (tx_idx * output_dims.y * output_dims.x) + (output_channel_idx * output_dims.x) + output_sample_idx;
 
         cuComplex sample = {static_cast<float>(input[input_idx]), -1 * static_cast<float>(input[input_idx + 1])};
-		output[output_idx] = iq_demod(sample, output_sample_idx, demod_freq, sample_freq);
+		//float test = abs(demod_freq - sample_freq);
+		sample = iq_demod(sample, output_sample_idx, demod_freq, sample_freq);
+		output[output_idx] = sample;
     }
 
 	__global__ void
