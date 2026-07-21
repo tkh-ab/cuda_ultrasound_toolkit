@@ -7,6 +7,14 @@
 namespace bf_kernels
 {
 
+__device__ __forceinline__ inline
+cuComplex rotate_iq(cuComplex sample, int index, float demod_freq, float sample_freq)
+{
+	float t = TWO_PI_F * index * demod_freq / sample_freq;
+	cuComplex demod = {cosf(t), -sinf(t)};
+	return cuCmulf(sample, demod);
+}
+
 
 __global__ void
 forces_beamform(const cuComplex* rfData, cuComplex* volume, const float* hadamard_row)
@@ -522,6 +530,7 @@ tpw_beamform(const cuComplex* rfData, cuComplex* volume, const float* angles)
 			size_t channel_offset = Beamformer_Constants.channel_count * Beamformer_Constants.sample_count * acq + Beamformer_Constants.sample_count * c;
 
 			cuComplex value = utils::fast_cubic_spline(scan_index, rfData + channel_offset);
+			value = rotate_iq(value, scan_index, Beamformer_Constants.center_freq, Beamformer_Constants.sample_freq);
 			value = SCALE_V2(value, apo);
 			total = ADD_V2(total, value);
 			incoherent_sum += NORM_SQUARE_V2(value);

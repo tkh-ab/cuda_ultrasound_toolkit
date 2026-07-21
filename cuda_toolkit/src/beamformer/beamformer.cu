@@ -87,6 +87,9 @@ Beamformer::_params_to_constants(const CudaBeamformerParameters& bp)
 	constants.apo_type = bp.apo_type;
 	constants.to_power = bp.to_power;
 
+	constants.center_freq = bp.center_frequency;
+	constants.sample_freq = bp.sampling_frequency;
+
     bool readi_matrix_changed = (_constants.readi_group_count != bp.readi_group_count ||
                                 _constants.encoded_matrix != bp.decode);
 
