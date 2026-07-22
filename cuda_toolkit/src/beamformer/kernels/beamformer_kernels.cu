@@ -7,13 +7,6 @@
 namespace bf_kernels
 {
 
-__device__ __forceinline__ inline
-cuComplex rotate_iq(cuComplex sample, int index, float demod_freq, float sample_freq)
-{
-	float t = TWO_PI_F * index * demod_freq / sample_freq;
-	cuComplex demod = {cosf(t), -sinf(t)};
-	return cuCmulf(sample, demod);
-}
 
 
 __global__ void
@@ -484,6 +477,15 @@ block_beamform(const cuComplex* rfData, cuComplex* volume)
 	}
 	return;
 }
+
+__device__ __forceinline__ inline
+cuComplex rotate_iq(cuComplex sample, float index, float demod_freq, float sample_freq)
+{
+	float t = TWO_PI_F * index * demod_freq / sample_freq;
+	cuComplex demod = {cosf(t), sinf(t)};
+	return cuCmulf(sample, demod);
+}
+
 
 __global__ void
 tpw_beamform(const cuComplex* rfData, cuComplex* volume, const float* angles)

@@ -12,9 +12,9 @@ namespace data_conversion::kernels
 {    
 
 	__device__ __forceinline__ inline
-	cuComplex iq_demod(cuComplex sample, int index, float demod_freq, float sample_freq)
+	cuComplex iq_demod(cuComplex sample, uint index, float demod_freq, float sample_freq)
 	{
-		float t = TWO_PI_F * index * demod_freq / sample_freq;
+		float t = TWO_PI_F * (float)index * demod_freq / sample_freq;
 		cuComplex demod = {cosf(t), -sinf(t)};
 		return cuCmulf(sample, demod);
 	}
@@ -47,16 +47,15 @@ namespace data_conversion::kernels
     convert_demod_cf32(const T* input, cuComplex* output, uint2 input_dims, uint3 output_dims, 
 		const short* d_channel_mapping, float demod_freq, float sample_freq)
     {
-        uint raw_sample_idx = threadIdx.x + blockIdx.x * blockDim.x;
+        uint output_sample_idx = threadIdx.x + blockIdx.x * blockDim.x;
         uint output_channel_idx = blockIdx.y;
-        uint tx_idx = raw_sample_idx / output_dims.x;
-        uint output_sample_idx = raw_sample_idx % output_dims.x;
+        uint tx_idx = blockIdx.z;
 
-        if (raw_sample_idx * 2 >= input_dims.x) return;
+        if (output_sample_idx >= output_dims.x) return;
 
         uint raw_channel_idx = d_channel_mapping[output_channel_idx]; 
         
-        uint input_idx = (raw_channel_idx * input_dims.x) + raw_sample_idx * 2;
+        uint input_idx = (raw_channel_idx * input_dims.x) + tx_idx * output_dims.x * 2 + output_sample_idx * 2;
         uint output_idx = (tx_idx * output_dims.y * output_dims.x) + (output_channel_idx * output_dims.x) + output_sample_idx;
 
         cuComplex sample = {static_cast<float>(input[input_idx]), -1 * static_cast<float>(input[input_idx + 1])};

@@ -72,8 +72,8 @@ namespace data_conversion
         }
 
         dim3 block_dim(MAX_THREADS_PER_BLOCK, 1, 1);
-        uint grid_length = (uint)ceil((double)input_dims.x / MAX_THREADS_PER_BLOCK / 2); // Divide by 2 for complex samples
-        dim3 grid_dim(grid_length, output_dims.y, 1);
+        uint grid_length = (uint)ceil((double)output_dims.x / MAX_THREADS_PER_BLOCK); // Divide by 2 for complex samples
+        dim3 grid_dim(grid_length, output_dims.y, output_dims.z);
 
 		CUDA_RETURN_IF_ERROR(cudaMemset(d_mid, 0x00, output_dims.x * output_dims.y * output_dims.z * sizeof(cuComplex)));
 		CUDA_RETURN_IF_ERROR(cudaMemset(d_output, 0x00, output_dims.x * output_dims.y * output_dims.z * sizeof(cuComplex)));
