@@ -240,6 +240,7 @@ IF %ERRORLEVEL% LEQ 1 (
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\api\cuda_toolkit.cpp" />
+    <ClCompile Include="src\api\cuda_toolkit_matlab.cpp" />
     <ClCompile Include="src\api\cuda_toolkit_ogl.cpp" />
     <ClCompile Include="src\api\dllmain.cpp" />
     <ClCompile Include="src\image_processing\image_processor.cpp" />
@@ -258,6 +259,7 @@ IF %ERRORLEVEL% LEQ 1 (
     <ClInclude Include="source\cuda_session.h" />
     <ClInclude Include="source\cuda_toolkit.h" />
     <ClInclude Include="src\public\cuda_toolkit.hpp" />
+    <ClInclude Include="src\public\cuda_toolkit_matlab.h" />
     <ClInclude Include="src\public\cuda_toolkit_ogl.h" />
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\image_processing\image_processor.h" />
