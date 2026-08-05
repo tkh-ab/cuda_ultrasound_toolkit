@@ -171,6 +171,13 @@ typedef struct CudaBeamformerParameters
 	SampleType sample_type;			
 } CudaBeamformerParameters;
 
+typedef struct CorrImagesParameters
+{
+	unsigned int template_dims[2];	// [rows, cols]
+	unsigned int source_dims[2];	// [rows, cols]
+} CorrImagesParameters;
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -44,11 +44,11 @@ typedef struct SVDParameters
 	int filter_indicies[256];	// Singular values to remove
 } SVDParameters;
 
-typedef struct CorrImagesParameters
-{
-	unsigned int template_dims[2];	// [rows, cols]
-	unsigned int source_dims[2];	// [rows, cols]
-} CorrImagesParameters;
+// typedef struct CorrImagesParameters
+// {
+// 	unsigned int template_dims[2];	// [rows, cols]
+// 	unsigned int source_dims[2];	// [rows, cols]
+// } CorrImagesParameters;
 
 typedef struct SharedMemoryParams
 {
