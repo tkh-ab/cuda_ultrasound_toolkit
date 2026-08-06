@@ -23,7 +23,7 @@ bool ImageProcessor::ncc_block_match(std::vector<PitchedArray<float>> &d_input_i
 
 	if (!_create_pipeline_ctxs(params, stream_count)) return false;
 
-	bool result = false;
+	bool result = true;
 	for( uint i = 0; i < d_input_images.size(); ++i)
 	{
 		std::cout << "Processing frame " << i + 1<< std::endl;
