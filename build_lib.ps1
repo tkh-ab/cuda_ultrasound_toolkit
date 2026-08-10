@@ -43,8 +43,10 @@ if ($Help) {
     return
 }
 
-$HeaderDir = "$PSScriptRoot\cuda_toolkit\src\public\"
+$PublicDir = "$PSScriptRoot\cuda_toolkit\src\public"
+$MatlabDir = "$PublicDir\matlab"
 $HeaderOutputDir = "$OutputDir\include"
+$MatlabOutputDir = "$OutputDir\matlab"
 
 $Project = "$PSScriptRoot\cuda_toolkit\cuda_toolkit.vcxproj"
 $Platform = "x64"
@@ -89,7 +91,15 @@ if(-not (Test-Path $HeaderOutputDir)) {
 	New-Item -ItemType Directory -Path $HeaderOutputDir | Out-Null
 }
 
-Copy-Item -Path "$HeaderDir\*" -Destination "$HeaderOutputDir" -Force
+if(-not (Test-Path $MatlabOutputDir)) {
+	New-Item -ItemType Directory -Path $MatlabOutputDir | Out-Null
+}
+
+Copy-Item -Path "$PublicDir\*.h" -Destination "$HeaderOutputDir" -Force
+
+if(Test-Path $MatlabDir) {
+	Copy-Item -Path "$MatlabDir\*" -Destination "$MatlabOutputDir" -Force
+}
 
 if ($build_exit_code -ne 0) {
 	Write-Error "MSBuild failed with exit code $build_exit_code."

@@ -178,11 +178,7 @@ cuda_toolkit::beamform(std::span<const uint8_t> input_data,
 	}
 	else
 	{
-		if (!rf_processor.convert_demod(buffers.d_input, buffers.d_rf, bp.data_type, bp.center_frequency, bp.sampling_frequency, bp.rf_filter, bp.filter_length))
-		{
-			std::cerr << "Failed to convert and demodulate RF data." << std::endl;
-			return false;
-		}
+		std::cerr << "Unsupported sample type: " << bp.sample_type << std::endl;
 	}
 	
     
