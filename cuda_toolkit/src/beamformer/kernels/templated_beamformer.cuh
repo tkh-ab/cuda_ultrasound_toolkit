@@ -13,58 +13,30 @@ namespace bf_kernels
 template <SequenceId SEQ>
 concept SupportedDASSequence = (SEQ == SequenceId::FORCES) || (SEQ == SequenceId::HERCULES);
 
-template<SequenceId SEQ, FocusType DIR> __device__ inline float3 
-initial_tx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc, const float3 focal_point)
+template<FocusType DIR> __device__ inline float3 
+calc_tx_vec(const float2 element_pos, const float2 pitches, const float3 vox_loc, const float3 focal_point)
 {
-	if constexpr (SEQ == SequenceId::FORCES)
+	if constexpr (DIR == FocusType::YZ_PLANE)
 	{
-		return make_float3(vox_loc.x - Beamformer_Constants.xdc_mins.x , 0.0f, vox_loc.z);
+		return make_float3(0.0f, vox_loc.y * sinf(focal_point.y), vox_loc.z * cosf(focal_point.y));
 	}
-	else if constexpr (SEQ == SequenceId::HERCULES)
+	else if constexpr (DIR == FocusType::XZ_PLANE)
 	{
-		if constexpr (DIR == FocusType::YZ_PLANE)
-		{
-			return make_float3(0.0f, vox_loc.y * sinf(focal_point.y), vox_loc.z * cosf(focal_point.y));
-		}
-		else if constexpr (DIR == FocusType::XZ_PLANE)
-		{
-			return make_float3(vox_loc.x * sinf(focal_point.x), 0.0f, vox_loc.z * cosf(focal_point.x));
-		}
-		else if constexpr (DIR == FocusType::XZ_FOCUS)
-		{
-			return make_float3(vox_loc.x - focal_point.x, 0.0f, vox_loc.z - focal_point.z);
-		}
-		else if constexpr (DIR == FocusType::YZ_FOCUS)
-		{
-			return make_float3(0.0f, vox_loc.y - focal_point.y, vox_loc.z - focal_point.z);
-		}
-		else if constexpr (DIR == FocusType::SPHERE_FOCUS)
-		{
-			static_assert(false, "Spherical focusing not supported for HERCULES");
-		}
+		return make_float3(vox_loc.x * sinf(focal_point.x), 0.0f, vox_loc.z * cosf(focal_point.x));
 	}
-	else
+	else if constexpr (DIR == FocusType::XZ_FOCUS)
 	{
-		static_assert(false, "Unsupported sequence for DAS beamforming");
+		return make_float3(vox_loc.x - focal_point.x, 0.0f, vox_loc.z - focal_point.z);
 	}
-}
+	else if constexpr (DIR == FocusType::YZ_FOCUS)
+	{
+		return make_float3(0.0f, vox_loc.y - focal_point.y, vox_loc.z - focal_point.z);
+	}
+	else if constexpr (DIR == FocusType::SPHERE_FOCUS)
+	{
+		static_assert(false, "Spherical focusing not supported.");
+	}
 
-template<SequenceId SEQ> __device__ inline float3 
-initial_rx_vec(const float2 xdc_mins, const float2 pitches, const float3 vox_loc)
-{
-	if constexpr (SEQ == SequenceId::FORCES)
-	{
-		return make_float3(Beamformer_Constants.xdc_mins.x -vox_loc.x, 0.0f, -vox_loc.z);
-	}
-	else if constexpr (SEQ == SequenceId::HERCULES)
-	{
-		return make_float3(Beamformer_Constants.xdc_mins.x - vox_loc.x,
-							Beamformer_Constants.xdc_mins.y - vox_loc.y, -vox_loc.z);
-	}
-	else
-	{
-		static_assert(false, "Unsupported sequence for DAS beamforming");
-	}
 }
 
 // Returns the unpacked decode bit in the top bit of the uint
@@ -147,18 +119,18 @@ hercules_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, 
 	}
 	float3 focal_point = { 0.0f, 0.0f, Beamformer_Constants.focal_point.z };
 
-	float3 tx_vec = initial_tx_vec<HERCULES, DIR>(Beamformer_Constants.xdc_mins,
+	float3 tx_vec = calc_tx_vec<DIR>(Beamformer_Constants.xdc_mins,
 													Beamformer_Constants.pitches,
 													vox_loc,
 													focal_point);
 
-	float3 rx_vec = initial_rx_vec<HERCULES>(Beamformer_Constants.xdc_mins,
-											Beamformer_Constants.pitches,
-											vox_loc);
+	float3 rx_vec = {Beamformer_Constants.xdc_mins.x - vox_loc.x, Beamformer_Constants.xdc_mins.y - vox_loc.y, -vox_loc.z};
 
 	float initial_rx_vec_y = rx_vec.y;
 
-	float tx_distance = copysignf(NORM_F3(tx_vec), tx_vec.z);
+	// Transmit dist is two vectors, from the tx array to the focal point, then from the focal point to the voxel.
+	// If the voxel is between the focus and the array, we subtract the second vector.
+	float tx_distance = copysignf(NORM_F3(tx_vec), tx_vec.z) + focal_point.z;
 	float incoherent_sum = 0.0f;
 	cuComplex total = {0.0f, 0.0f};
 	int total_transmits = Beamformer_Constants.tx_count * Beamformer_Constants.readi_group_count;
@@ -260,16 +232,11 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 
 	if(!COMPARE_LT_V3(voxel_idx, Beamformer_Constants.voxel_dims)) return;
 
-	float3 tx_vec = initial_tx_vec<FORCES, FocusType::XZ_FOCUS>(Beamformer_Constants.xdc_mins,
-													Beamformer_Constants.pitches,
-													vox_loc, {0.0f, 0.0f, 0.0f});
+	float tx_el_pos = Beamformer_Constants.xdc_mins.x;
+	float rx_el_pos = Beamformer_Constants.xdc_mins.x;
 
-	float3 rx_vec = initial_rx_vec<FORCES>(Beamformer_Constants.xdc_mins,
-											Beamformer_Constants.pitches,
-											vox_loc);
-
-	float rx_pos = Beamformer_Constants.xdc_mins.x;
-	float tx_pos = Beamformer_Constants.xdc_mins.x;
+	float3 tx_vec = {vox_loc.x - tx_el_pos, 0.0f, vox_loc.z};
+	float3 rx_vec = {rx_el_pos - vox_loc.x, 0.0f, -vox_loc.z};
 							
 	float incoherent_sum = 0.0f;
 	cuComplex total = {0.0f, 0.0f};
@@ -288,7 +255,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 		}
 		else if constexpr (APO == ApoType::RX_TO_SIN || APO == ApoType::BOTH_TO_SIN)
 		{
-			rx_apo = sin_apo_to(rx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+			rx_apo = sin_apo_to(rx_el_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
 		}
 
 		if(rx_apo > APO_MIN)	
@@ -301,7 +268,7 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					
 					if constexpr (APO == ApoType::BOTH_TO_SIN || APO == ApoType::TX_TO_SIN)
 					{
-						tx_apo = sin_apo_to(tx_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
+						tx_apo = sin_apo_to(tx_el_pos, Beamformer_Constants.xdc_maxes.x, Beamformer_Constants.to_power);
 					}
 					else
 					{
@@ -336,14 +303,14 @@ forces_beamform_new(const cuComplex* __restrict__ rf_data, cuComplex* volume, u6
 					incoherent_sum += NORM_SQUARE_V2(value);
 					
 					tx_vec.x -= Beamformer_Constants.pitches.x;
-					tx_pos += Beamformer_Constants.pitches.x;
+					tx_el_pos += Beamformer_Constants.pitches.x;
 				}
 			}
 			tx_vec.x += Beamformer_Constants.pitches.x * total_transmits;
-			tx_pos -= Beamformer_Constants.pitches.x * total_transmits;
+			tx_el_pos -= Beamformer_Constants.pitches.x * total_transmits;
 		}
 		rx_vec.x += Beamformer_Constants.pitches.x;
-		rx_pos += Beamformer_Constants.pitches.x;
+		rx_el_pos += Beamformer_Constants.pitches.x;
 	}
 
 	float coherency_factor = NORM_SQUARE_V2(total) / incoherent_sum;

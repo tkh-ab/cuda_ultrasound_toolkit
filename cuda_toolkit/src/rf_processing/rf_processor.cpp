@@ -21,11 +21,7 @@ bool
 RfProcessor::init(uint2 rf_raw_dim, uint3 dec_data_dim, EncodingMatrix readi_ordering)
 {
 
-    if (_init && !_dims_changed(rf_raw_dim, dec_data_dim, readi_ordering))
-    {
-        std::cerr << "Session already initialized with the same dimensions." << std::endl;
-        return true;
-    }
+    if (_init && !_dims_changed(rf_raw_dim, dec_data_dim, readi_ordering)) return true;
 
     int sample_count = static_cast<int>(dec_data_dim.x);
     int channel_count = static_cast<int>(dec_data_dim.y * dec_data_dim.z);
