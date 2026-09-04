@@ -127,8 +127,9 @@ inline std::string format_cplx(const cuComplex& value)
     do {                                                                                    \
         cudaError_t err_ = (err);                                                           \
         if (err_ != cudaSuccess) {                                                          \
-            std::printf("CUDA error %s (%d) '%s'\n At %s:%d\n",                             \
-                cudaGetErrorName(err_), err_, cudaGetErrorString(err_), __FILE__, __LINE__);\
+            std::cerr << "CUDA error " << cudaGetErrorName(err_) << " (" << err_            \
+                << ") '" << cudaGetErrorString(err_) << "'\n At " << __FILE__ << ':'         \
+                << __LINE__ << '\n';                                                         \
             ASSERT(false);																	\
 			return false;																	\
         }                                                                                   \
@@ -139,7 +140,8 @@ inline std::string format_cplx(const cuComplex& value)
     do {                                                                                    \
         cublasStatus_t err_ = (err);                                                        \
         if (err_ != CUBLAS_STATUS_SUCCESS) {                                                \
-            std::printf("cublas error %d at %s:%d\n", err_, __FILE__, __LINE__);            \
+            std::cerr << "cublas error " << err_ << " at " << __FILE__ << ':'              \
+                << __LINE__ << '\n';                                                         \
             ASSERT(false);                                                                  \
 			return false;																	\
         }                                                                                   \
@@ -150,7 +152,8 @@ inline std::string format_cplx(const cuComplex& value)
     do {                                                                                    \
         cufftResult_t err_ = (err);                                                         \
         if (err_ != CUFFT_SUCCESS) {                                                        \
-            std::printf("cufft error %d at %s:%d\n", err_, __FILE__, __LINE__);             \
+            std::cerr << "cufft error " << err_ << " at " << __FILE__ << ':'               \
+                << __LINE__ << '\n';                                                         \
             ASSERT(false);                                                                  \
 			return false;																	\
 		}                                                                                   \
@@ -162,13 +165,15 @@ inline std::string format_cplx(const cuComplex& value)
         NppStatus err_ = (err);																\
         if(err < 0)																			\
         {																					\
-            std::printf("NPP error %d at %s:%d\n", err_, __FILE__, __LINE__);				\
+            std::cerr << "NPP error " << err_ << " at " << __FILE__ << ':'                 \
+                << __LINE__ << '\n';                                                         \
             ASSERT(false);																	\
 			return false;																	\
         }																					\
         else if(err > 0)																	\
         {																					\
-            std::printf("NPP warning %d at %s:%d\n", err_, __FILE__, __LINE__);				\
+            std::cerr << "NPP warning " << err_ << " at " << __FILE__ << ':'               \
+                << __LINE__ << '\n';                                                         \
         }																					\
     } while(0)																				\
 
@@ -352,4 +357,3 @@ namespace types
 };
 
 #endif // !DEFS_H
-
