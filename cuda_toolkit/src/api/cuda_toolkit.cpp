@@ -231,7 +231,11 @@ cuda_toolkit::motion_detection(std::span<const uint8_t> images,
 	cudaDeviceSynchronize();
 	auto& image_processor = get_image_processor();
 	bool result = image_processor.ncc_block_match(d_input_images, reinterpret_cast<float4*>(motion_maps.data()), params);
-
+	cudaDeviceSynchronize();
+	for (const auto& img : d_input_images)
+	{
+		cudaFree(img.data);
+	}
 	return result;
 }
 
@@ -319,5 +323,8 @@ cuda_toolkit::corr_images(std::span<const float> template_image,
 	PitchedArray<float> d_source_image(d_source, source_pitch, uint3(src_dims.x, src_dims.y, 1));
 
 	auto& image_processor = get_image_processor();
-	return image_processor.corr_images(d_template_image, d_source_image, corr_map.data(), tpl_dims, src_dims);
+	bool result = image_processor.corr_images(d_template_image, d_source_image, corr_map.data(), tpl_dims, src_dims);
+	cudaFree(d_source);
+	cudaFree(d_template);
+	return result;
 }
